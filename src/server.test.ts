@@ -40,7 +40,7 @@ describe('TuiServer', () => {
     expect(server.getClientCount()).toBe(0);
   });
 
-  it('tracks stores, updates current state, and emits events', async () => {
+  it('tracks stores, updates current state, and records action history', async () => {
     server = createTuiServer({ port: TEST_PORT });
     const storeUpdates: StoreInfo[] = [];
     server.on('storeUpdated', (info) => {
@@ -51,7 +51,7 @@ describe('TuiServer', () => {
     const client = new WebSocket(`ws://localhost:${TEST_PORT}`);
     await new Promise<void>((resolve) => client.on('open', () => resolve()));
 
-    // Register store A
+    // 1. Initialize store
     client.send(
       JSON.stringify({
         type: 'INIT_STORE',
@@ -69,31 +69,43 @@ describe('TuiServer', () => {
       }, 10);
     });
 
-    expect(server.getStores()).toEqual([
-      { name: 'auth', currentState: { user: null, isLoggedIn: false } },
-    ]);
+    const store = server.getStores()[0];
+    expect(store.name).toBe('auth');
+    expect(store.currentState).toEqual({ user: null, isLoggedIn: false });
+    expect(store.actions.length).toBe(1);
+    expect(store.actions[0].action).toBe('@@INIT');
+    expect(store.actions[0].state).toEqual({ user: null, isLoggedIn: false });
 
-    // Update store A
+    // 2. Dispatch an action
     client.send(
       JSON.stringify({
-        type: 'SET_STATE',
+        type: 'ACTION',
         store: 'auth',
+        action: 'loginUser',
         state: { user: { id: 1, name: 'Alice' }, isLoggedIn: true },
+        timestamp: 1700000000000,
       })
     );
 
     await new Promise<void>((resolve) => {
       const interval = setInterval(() => {
-        if (storeUpdates.length >= 2) {
+        if (server?.getStoreActions('auth').length === 2) {
           clearInterval(interval);
           resolve();
         }
       }, 10);
     });
 
-    expect(server.getStores()[0]).toEqual({
-      name: 'auth',
-      currentState: { user: { id: 1, name: 'Alice' }, isLoggedIn: true },
+    const actions = server.getStoreActions('auth');
+    expect(actions.length).toBe(2);
+    expect(actions[1].action).toBe('loginUser');
+    expect(actions[1].state).toEqual({ user: { id: 1, name: 'Alice' }, isLoggedIn: true });
+    expect(actions[1].timestamp).toBe(1700000000000);
+
+    // Current state is also updated
+    expect(server.getStores()[0].currentState).toEqual({
+      user: { id: 1, name: 'Alice' },
+      isLoggedIn: true,
     });
 
     client.close();

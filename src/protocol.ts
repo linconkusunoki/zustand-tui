@@ -8,4 +8,13 @@ export type TuiClientMessage =
       type: 'SET_STATE';
       store: string;
       state: unknown;
+      action?: string;
+      timestamp?: number;
+    }
+  | {
+      type: 'ACTION';
+      store: string;
+      action: string;
+      state: unknown;
+      timestamp: number;
     };

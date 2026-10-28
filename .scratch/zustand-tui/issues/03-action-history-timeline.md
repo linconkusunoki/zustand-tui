@@ -5,9 +5,9 @@ Intercept store mutations to track history. The client snippet extracts action n
 
 **Blocked by:** 02: Live Store Registration & State Viewer
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Client snippet wraps `set()` to capture each mutation along with an explicit action name or an inferred caller name extracted from `new Error().stack`.
-- [ ] TUI layout expands to 3 panes: Stores (left), Action Timeline (middle), State Viewer (right).
-- [ ] Dispatched actions appear chronologically in the middle timeline.
-- [ ] Navigating up and down the action timeline updates the State Viewer to show the historical state snapshot at that specific action.
+- [x] Client snippet wraps `set()` to capture each mutation along with an explicit action name or an inferred caller name extracted from `new Error().stack`.
+- [x] TUI layout expands to 3 panes: Stores (left), Action Timeline (middle), State Viewer (right).
+- [x] Dispatched actions appear chronologically in the middle timeline.
+- [x] Navigating up and down the action timeline updates the State Viewer to show the historical state snapshot at that specific action.

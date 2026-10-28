@@ -1,13 +1,24 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import type { StoreInfo } from '../server.js';
+import type { ActionRecord } from '../server.js';
 
 export interface StateViewerProps {
-  store?: StoreInfo;
+  storeName?: string;
+  action?: ActionRecord;
+  fallbackState?: unknown;
 }
 
-export const StateViewer: React.FC<StateViewerProps> = ({ store }) => {
-  const storeTitle = store ? `State (${store.name})` : 'State';
+export const StateViewer: React.FC<StateViewerProps> = ({
+  storeName,
+  action,
+  fallbackState,
+}) => {
+  const currentState = action ? action.state : fallbackState;
+  const storeTitle = storeName
+    ? action
+      ? `State (${storeName} @ ${action.action})`
+      : `State (${storeName})`
+    : 'State';
 
   return (
     <Box
@@ -23,15 +34,15 @@ export const StateViewer: React.FC<StateViewerProps> = ({ store }) => {
         </Text>
       </Box>
 
-      {!store ? (
+      {!storeName && !action ? (
         <Text color="gray">(No store selected)</Text>
-      ) : store.currentState === undefined ? (
+      ) : currentState === undefined ? (
         <Text color="gray">undefined</Text>
       ) : (
         <Text color="white">
-          {typeof store.currentState === 'object' && store.currentState !== null
-            ? JSON.stringify(store.currentState, null, 2)
-            : String(store.currentState)}
+          {typeof currentState === 'object' && currentState !== null
+            ? JSON.stringify(currentState, null, 2)
+            : String(currentState)}
         </Text>
       )}
     </Box>

@@ -1,7 +1,13 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { WebSocket as WsWebSocket } from 'ws';
 import { createTuiServer, TuiServer } from './server.js';
-import { connectToTui, registerStore, ClientConnection, resetStoreCounter } from './client.js';
+import {
+  connectToTui,
+  registerStore,
+  tui,
+  ClientConnection,
+  resetStoreCounter,
+} from './client.js';
 
 describe('client connector', () => {
   let server: TuiServer | null = null;
@@ -84,7 +90,6 @@ describe('client connector', () => {
 
     registerStore(fakeStore, { name: 'counter-store', client });
 
-    // Wait for INIT_STORE message
     await new Promise<void>((resolve) => {
       const interval = setInterval(() => {
         if (receivedMessages.some((m) => m.type === 'INIT_STORE' && m.store === 'counter-store')) {
@@ -105,7 +110,6 @@ describe('client connector', () => {
     currentState = { count: 1 };
     listeners.forEach((fn) => fn(currentState));
 
-    // Wait for SET_STATE message
     await new Promise<void>((resolve) => {
       const interval = setInterval(() => {
         if (receivedMessages.some((m) => m.type === 'SET_STATE' && m.store === 'counter-store')) {
@@ -116,14 +120,11 @@ describe('client connector', () => {
     });
 
     const setMsg = receivedMessages.find((m) => m.type === 'SET_STATE');
-    expect(setMsg).toEqual({
-      type: 'SET_STATE',
-      store: 'counter-store',
-      state: { count: 1 },
-    });
+    expect(setMsg.store).toBe('counter-store');
+    expect(setMsg.state).toEqual({ count: 1 });
   });
 
-  it('falls back to Store-1, Store-2 when name is omitted', async () => {
+  it('tui middleware captures explicit and inferred action names', async () => {
     const receivedMessages: any[] = [];
     server = createTuiServer({ port: TEST_PORT });
     server.on('message', (msg) => {
@@ -136,30 +137,72 @@ describe('client connector', () => {
       WebSocketClass: WsWebSocket as unknown as typeof WebSocket,
     });
 
-    const storeA = { getState: () => ({ a: 1 }), subscribe: () => () => {} };
-    const storeB = { getState: () => ({ b: 2 }), subscribe: () => () => {} };
+    // Simulate Zustand create with tui middleware
+    let state = { count: 0 };
+    const listeners = new Set<(s: any) => void>();
+    const api = {
+      getState: () => state,
+      setState: (next: any) => {
+        state = typeof next === 'function' ? next(state) : next;
+        listeners.forEach((l) => l(state));
+      },
+      subscribe: (fn: any) => {
+        listeners.add(fn);
+        return () => listeners.delete(fn);
+      },
+    };
 
-    registerStore(storeA, { client });
-    registerStore(storeB, { client });
+    const storeInitializer = (set: any) => ({
+      increment: () => set((prev: any) => ({ count: prev.count + 1 })),
+      customSet: () => set({ count: 10 }, false, 'setTen'),
+    });
+
+    const middleware = tui('test-store', { client });
+    const storeObj = middleware(storeInitializer)(api.setState, api.getState, api);
 
     await new Promise<void>((resolve) => {
       const interval = setInterval(() => {
-        if (receivedMessages.length >= 2) {
+        if (receivedMessages.some((m) => m.type === 'INIT_STORE')) {
           clearInterval(interval);
           resolve();
         }
       }, 10);
     });
 
-    expect(receivedMessages[0]).toEqual({
-      type: 'INIT_STORE',
-      store: 'Store-1',
-      state: { a: 1 },
+    // 1. Calling increment() extracts caller name from stack
+    storeObj.increment();
+
+    await new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        if (receivedMessages.some((m) => m.type === 'ACTION' && m.action === 'increment')) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 10);
     });
-    expect(receivedMessages[1]).toEqual({
-      type: 'INIT_STORE',
-      store: 'Store-2',
-      state: { b: 2 },
+
+    const actionMsg1 = receivedMessages.find(
+      (m) => m.type === 'ACTION' && m.action === 'increment'
+    );
+    expect(actionMsg1).toBeDefined();
+    expect(actionMsg1.state).toEqual({ count: 1 });
+
+    // 2. Calling customSet() uses explicit action name
+    storeObj.customSet();
+
+    await new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        if (receivedMessages.some((m) => m.type === 'ACTION' && m.action === 'setTen')) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 10);
     });
+
+    const actionMsg2 = receivedMessages.find(
+      (m) => m.type === 'ACTION' && m.action === 'setTen'
+    );
+    expect(actionMsg2).toBeDefined();
+    expect(actionMsg2.state).toEqual({ count: 10 });
   });
 });

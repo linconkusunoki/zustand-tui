@@ -5,21 +5,26 @@ import type { StoreInfo } from '../server.js';
 export interface StoreListProps {
   stores: StoreInfo[];
   selectedIndex: number;
+  isFocused?: boolean;
 }
 
-export const StoreList: React.FC<StoreListProps> = ({ stores, selectedIndex }) => {
+export const StoreList: React.FC<StoreListProps> = ({
+  stores,
+  selectedIndex,
+  isFocused = false,
+}) => {
   return (
     <Box
       flexDirection="column"
       borderStyle="single"
-      borderColor="gray"
-      width="30%"
-      minWidth={20}
+      borderColor={isFocused ? 'cyan' : 'gray'}
+      width="25%"
+      minWidth={18}
       paddingX={1}
     >
       <Box marginBottom={1}>
-        <Text bold underline color="cyan">
-          Stores
+        <Text bold underline color={isFocused ? 'cyan' : 'white'}>
+          Stores ({stores.length})
         </Text>
       </Box>
 

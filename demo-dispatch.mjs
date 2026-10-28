@@ -20,25 +20,29 @@ ws.on('open', () => {
 
   console.log('-> Initialized "auth-store" and "booking-store"');
 
-  // 2. Dispatch live state mutations sequentially every 2 seconds
+  // 2. Dispatch live actions sequentially every 2 seconds
   const updates = [
     {
       store: 'auth-store',
+      action: 'loginUser',
       state: { user: { id: 42, name: 'Lincon', role: 'admin' }, isAuthenticated: true },
       desc: 'User logged in'
     },
     {
       store: 'booking-store',
+      action: 'selectVehicle',
       state: { step: 'vehicle_selected', camperId: 'vw-california-t6', total: 450 },
       desc: 'Selected VW California'
     },
     {
       store: 'booking-store',
+      action: 'addInsurance',
       state: { step: 'insurance_added', camperId: 'vw-california-t6', total: 530, insurance: 'premium' },
       desc: 'Added premium insurance'
     },
     {
       store: 'booking-store',
+      action: 'completeBooking',
       state: { step: 'confirmed', camperId: 'vw-california-t6', total: 530, bookingId: 'BK-99120' },
       desc: 'Booking completed'
     }
@@ -48,8 +52,14 @@ ws.on('open', () => {
   const timer = setInterval(() => {
     if (i < updates.length) {
       const u = updates[i];
-      ws.send(JSON.stringify({ type: 'SET_STATE', store: u.store, state: u.state }));
-      console.log(`[${new Date().toLocaleTimeString()}] Dispatched to ${u.store}: "${u.desc}"`);
+      ws.send(JSON.stringify({
+        type: 'ACTION',
+        store: u.store,
+        action: u.action,
+        state: u.state,
+        timestamp: Date.now()
+      }));
+      console.log(`[${new Date().toLocaleTimeString()}] Dispatched "${u.action}" to ${u.store}: "${u.desc}"`);
       i++;
     } else {
       clearInterval(timer);

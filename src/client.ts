@@ -1,4 +1,5 @@
 import type { TuiClientMessage } from './protocol.js';
+import { extractActionName } from './action-extractor.js';
 
 export interface ClientConnectorOptions {
   url?: string;
@@ -117,4 +118,77 @@ export function registerStore<T>(
   });
 
   return unsubscribe;
+}
+
+export interface TuiOptions extends ClientConnectorOptions {
+  name?: string;
+  client?: ClientConnection;
+}
+
+/**
+ * Zustand middleware that automatically broadcasts actions, caller names, and state snapshots.
+ */
+export function tui<T>(
+  nameOrOptions?: string | TuiOptions,
+  optionsOrClient?: TuiOptions
+) {
+  let storeName: string | undefined;
+  let clientOptions: ClientConnectorOptions = {};
+  let clientInstance: ClientConnection | undefined;
+
+  if (typeof nameOrOptions === 'string') {
+    storeName = nameOrOptions;
+    if (optionsOrClient) {
+      if (optionsOrClient.client) {
+        clientInstance = optionsOrClient.client;
+      }
+      clientOptions = optionsOrClient;
+    }
+  } else if (nameOrOptions && typeof nameOrOptions === 'object') {
+    storeName = nameOrOptions.name;
+    clientInstance = nameOrOptions.client;
+    clientOptions = nameOrOptions;
+  }
+
+  const client =
+    clientInstance ??
+    (clientOptions.url || clientOptions.WebSocketClass
+      ? connectToTui(clientOptions)
+      : getDefaultClient());
+
+  return (initializer: any) => (set: any, get: any, api: any) => {
+    if (!storeName) {
+      storeCounter += 1;
+      storeName = `Store-${storeCounter}`;
+    }
+
+    const namedStoreName = storeName;
+
+    // Intercept set to capture action names
+    const setWithAction = (partial: any, replace?: boolean, explicitActionName?: string) => {
+      const err = new Error();
+      const actionName = extractActionName(err.stack, explicitActionName);
+      set(partial, replace);
+      const nextState = get ? get() : api.getState();
+
+      client.send({
+        type: 'ACTION',
+        store: namedStoreName,
+        action: actionName,
+        state: nextState,
+        timestamp: Date.now(),
+      });
+    };
+
+    const state = initializer(setWithAction, get, api);
+
+    // Initial state registration
+    client.send({
+      type: 'INIT_STORE',
+      store: namedStoreName,
+      state: get ? get() : api.getState ? api.getState() : state,
+    });
+
+    return state;
+  };
 }

@@ -6,9 +6,17 @@ export interface TuiServerOptions {
   port?: number;
 }
 
+export interface ActionRecord {
+  id: string;
+  action: string;
+  state: unknown;
+  timestamp: number;
+}
+
 export interface StoreInfo {
   name: string;
   currentState: unknown;
+  actions: ActionRecord[];
 }
 
 export interface TuiServer extends EventEmitter {
@@ -17,6 +25,7 @@ export interface TuiServer extends EventEmitter {
   stop(): Promise<void>;
   getClientCount(): number;
   getStores(): StoreInfo[];
+  getStoreActions(storeName: string): ActionRecord[];
 }
 
 export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
@@ -34,6 +43,10 @@ export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
 
   emitter.getStores = () => {
     return Array.from(stores.values());
+  };
+
+  emitter.getStoreActions = (storeName: string) => {
+    return stores.get(storeName)?.actions ?? [];
   };
 
   emitter.start = () => {
@@ -58,12 +71,50 @@ export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
               const msg = JSON.parse(rawData.toString()) as TuiClientMessage;
               emitter.emit('message', msg, ws);
 
-              if (msg.type === 'INIT_STORE' || msg.type === 'SET_STATE') {
+              if (msg.type === 'INIT_STORE') {
+                const initAction: ActionRecord = {
+                  id: '1',
+                  action: '@@INIT',
+                  state: msg.state,
+                  timestamp: Date.now(),
+                };
                 const storeInfo: StoreInfo = {
                   name: msg.store,
                   currentState: msg.state,
+                  actions: [initAction],
                 };
                 stores.set(msg.store, storeInfo);
+                emitter.emit('storeUpdated', storeInfo);
+                emitter.emit('storesChanged', Array.from(stores.values()));
+              } else if (msg.type === 'ACTION' || msg.type === 'SET_STATE') {
+                let storeInfo = stores.get(msg.store);
+                if (!storeInfo) {
+                  storeInfo = {
+                    name: msg.store,
+                    currentState: msg.state,
+                    actions: [],
+                  };
+                  stores.set(msg.store, storeInfo);
+                }
+
+                const actionName =
+                  msg.type === 'ACTION'
+                    ? msg.action
+                    : msg.action || 'setState';
+
+                const timestamp = msg.timestamp || Date.now();
+
+                const actionRecord: ActionRecord = {
+                  id: String(storeInfo.actions.length + 1),
+                  action: actionName,
+                  state: msg.state,
+                  timestamp,
+                };
+
+                storeInfo.actions.push(actionRecord);
+                storeInfo.currentState = msg.state;
+
+                emitter.emit('actionDispatched', msg.store, actionRecord);
                 emitter.emit('storeUpdated', storeInfo);
                 emitter.emit('storesChanged', Array.from(stores.values()));
               }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput, useApp, useStdin, useStdout } from 'ink';
 import type { TuiServer, StoreInfo } from '../server.js';
 import { StoreList } from './StoreList.js';
+import { ActionList } from './ActionList.js';
 import { StateViewer } from './StateViewer.js';
 
 export interface AppProps {
@@ -10,6 +11,7 @@ export interface AppProps {
   server?: TuiServer;
   stores?: StoreInfo[];
   selectedStoreIndex?: number;
+  selectedActionIndex?: number;
   fullscreen?: boolean;
 }
 
@@ -56,9 +58,11 @@ export const App: React.FC<AppProps> = ({
     return propStores ?? (server ? server.getStores() : []);
   });
 
-  const [selectedIndex, setSelectedIndex] = useState<number>(() => {
+  const [activePane, setActivePane] = useState<'stores' | 'actions'>('stores');
+  const [selectedStoreIndex, setSelectedStoreIndex] = useState<number>(() => {
     return propSelectedStoreIndex ?? 0;
   });
+  const [selectedActionIndex, setSelectedActionIndex] = useState<number>(-1);
 
   useEffect(() => {
     if (propStores !== undefined) {
@@ -100,6 +104,17 @@ export const App: React.FC<AppProps> = ({
     };
   }, [server]);
 
+  const clampedStoreIndex =
+    stores.length > 0 ? Math.min(selectedStoreIndex, stores.length - 1) : 0;
+  const currentStore = stores[clampedStoreIndex];
+  const actions = currentStore?.actions ?? [];
+
+  // Keep selected action pointing to the latest action if uninitialized or new actions arrived
+  const effectiveActionIndex =
+    selectedActionIndex >= 0 && selectedActionIndex < actions.length
+      ? selectedActionIndex
+      : Math.max(0, actions.length - 1);
+
   useInput(
     (input, key) => {
       if (input === 'q') {
@@ -107,20 +122,42 @@ export const App: React.FC<AppProps> = ({
         return;
       }
 
-      if (stores.length === 0) return;
+      if (key.tab) {
+        setActivePane((prev) => (prev === 'stores' ? 'actions' : 'stores'));
+        return;
+      }
 
-      if (key.upArrow || input === 'k') {
-        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : stores.length - 1));
-      } else if (key.downArrow || input === 'j') {
-        setSelectedIndex((prev) => (prev < stores.length - 1 ? prev + 1 : 0));
+      if (activePane === 'stores') {
+        if (stores.length === 0) return;
+
+        if (key.upArrow || input === 'k') {
+          setSelectedStoreIndex((prev) => (prev > 0 ? prev - 1 : stores.length - 1));
+          setSelectedActionIndex(-1); // Reset action selection to latest
+        } else if (key.downArrow || input === 'j') {
+          setSelectedStoreIndex((prev) => (prev < stores.length - 1 ? prev + 1 : 0));
+          setSelectedActionIndex(-1); // Reset action selection to latest
+        }
+      } else if (activePane === 'actions') {
+        if (actions.length === 0) return;
+
+        if (key.upArrow || input === 'k') {
+          setSelectedActionIndex((prev) => {
+            const current = prev >= 0 ? prev : actions.length - 1;
+            return current > 0 ? current - 1 : 0;
+          });
+        } else if (key.downArrow || input === 'j') {
+          setSelectedActionIndex((prev) => {
+            const current = prev >= 0 ? prev : actions.length - 1;
+            return current < actions.length - 1 ? current + 1 : actions.length - 1;
+          });
+        }
       }
     },
     { isActive: Boolean(isRawModeSupported) }
   );
 
   const activeCount = server ? serverClientCount : (clientCount ?? 0);
-  const clampedIndex = stores.length > 0 ? Math.min(selectedIndex, stores.length - 1) : 0;
-  const selectedStore = stores[clampedIndex];
+  const currentAction = actions[effectiveActionIndex];
 
   return (
     <Box
@@ -145,15 +182,28 @@ export const App: React.FC<AppProps> = ({
         </Box>
       </Box>
 
-      {/* 2-Pane Body */}
+      {/* 3-Pane Body */}
       <Box flexDirection="row" flexGrow={1} minHeight={8}>
-        <StoreList stores={stores} selectedIndex={clampedIndex} />
-        <StateViewer store={selectedStore} />
+        <StoreList
+          stores={stores}
+          selectedIndex={clampedStoreIndex}
+          isFocused={activePane === 'stores'}
+        />
+        <ActionList
+          actions={actions}
+          selectedIndex={effectiveActionIndex}
+          isFocused={activePane === 'actions'}
+        />
+        <StateViewer
+          storeName={currentStore?.name}
+          action={currentAction}
+          fallbackState={currentStore?.currentState}
+        />
       </Box>
 
       {/* Footer */}
       <Box marginTop={1} justifyContent="space-between">
-        <Text color="gray">[↑/↓ or j/k] Select Store | [q] Quit</Text>
+        <Text color="gray">[Tab] Switch Pane | [↑/↓ or j/k] Navigate | [q] Quit</Text>
         <Text color="gray">Zustand State Inspector</Text>
       </Box>
     </Box>
