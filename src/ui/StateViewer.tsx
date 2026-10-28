@@ -9,6 +9,8 @@ export interface StateViewerProps {
   previousAction?: ActionRecord;
   fallbackState?: unknown;
   viewMode?: 'snapshot' | 'diff';
+  isFocused?: boolean;
+  scrollOffset?: number;
 }
 
 export const StateViewer: React.FC<StateViewerProps> = ({
@@ -17,6 +19,8 @@ export const StateViewer: React.FC<StateViewerProps> = ({
   previousAction,
   fallbackState,
   viewMode = 'snapshot',
+  isFocused = false,
+  scrollOffset = 0,
 }) => {
   const currentState = action ? action.state : fallbackState;
   const previousState = previousAction?.state;
@@ -31,18 +35,27 @@ export const StateViewer: React.FC<StateViewerProps> = ({
   const diffs: DiffEntry[] =
     viewMode === 'diff' ? computeDiff(previousState, currentState) : [];
 
+  const rawJsonLines =
+    typeof currentState === 'object' && currentState !== null
+      ? JSON.stringify(currentState, null, 2).split('\n')
+      : [String(currentState)];
+
+  const visibleJsonLines = rawJsonLines.slice(scrollOffset);
+  const visibleDiffs = diffs.slice(scrollOffset);
+
   return (
     <Box
       flexDirection="column"
       borderStyle="single"
-      borderColor="gray"
+      borderColor={isFocused ? 'cyan' : 'gray'}
       flexGrow={1}
       paddingX={1}
     >
-      <Box marginBottom={1}>
-        <Text bold underline color="yellow">
+      <Box justifyContent="space-between" marginBottom={1}>
+        <Text bold underline color={isFocused ? 'cyan' : 'yellow'}>
           {storeTitle}
         </Text>
+        {scrollOffset > 0 && <Text color="gray">(scrolled +{scrollOffset})</Text>}
       </Box>
 
       {!storeName && !action ? (
@@ -51,7 +64,7 @@ export const StateViewer: React.FC<StateViewerProps> = ({
         diffs.length === 0 ? (
           <Text color="gray">(No changes in this action)</Text>
         ) : (
-          diffs.map((d) => {
+          visibleDiffs.map((d) => {
             if (d.kind === 'added') {
               return (
                 <Box key={d.path}>
@@ -82,11 +95,13 @@ export const StateViewer: React.FC<StateViewerProps> = ({
       ) : currentState === undefined ? (
         <Text color="gray">undefined</Text>
       ) : (
-        <Text color="white">
-          {typeof currentState === 'object' && currentState !== null
-            ? JSON.stringify(currentState, null, 2)
-            : String(currentState)}
-        </Text>
+        <Box flexDirection="column">
+          {visibleJsonLines.map((line, idx) => (
+            <Text key={idx} color="white">
+              {line}
+            </Text>
+          ))}
+        </Box>
       )}
     </Box>
   );

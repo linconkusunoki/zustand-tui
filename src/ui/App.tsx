@@ -73,11 +73,12 @@ export const App: React.FC<AppProps> = ({
     return server ? server.getSessions() : [];
   });
 
-  const [activePane, setActivePane] = useState<'stores' | 'actions'>('stores');
+  const [activePane, setActivePane] = useState<'stores' | 'actions' | 'state'>('stores');
   const [selectedStoreIndex, setSelectedStoreIndex] = useState<number>(() => {
     return propSelectedStoreIndex ?? 0;
   });
   const [selectedActionIndex, setSelectedActionIndex] = useState<number>(-1);
+  const [stateScrollOffset, setStateScrollOffset] = useState<number>(0);
   const [viewMode, setViewMode] = useState<'snapshot' | 'diff'>(() => {
     return propViewMode ?? 'snapshot';
   });
@@ -136,7 +137,7 @@ export const App: React.FC<AppProps> = ({
 
   useInput(
     (input, key) => {
-      if (input === 'q') {
+      if (input === 'q' || key.escape) {
         exit();
         return;
       }
@@ -147,7 +148,15 @@ export const App: React.FC<AppProps> = ({
       }
 
       if (key.tab) {
-        setActivePane((prev) => (prev === 'stores' ? 'actions' : 'stores'));
+        if (key.shift) {
+          setActivePane((prev) =>
+            prev === 'state' ? 'actions' : prev === 'actions' ? 'stores' : 'state'
+          );
+        } else {
+          setActivePane((prev) =>
+            prev === 'stores' ? 'actions' : prev === 'actions' ? 'state' : 'stores'
+          );
+        }
         return;
       }
 
@@ -157,9 +166,11 @@ export const App: React.FC<AppProps> = ({
         if (key.upArrow || input === 'k') {
           setSelectedStoreIndex((prev) => (prev > 0 ? prev - 1 : allStores.length - 1));
           setSelectedActionIndex(-1);
+          setStateScrollOffset(0);
         } else if (key.downArrow || input === 'j') {
           setSelectedStoreIndex((prev) => (prev < allStores.length - 1 ? prev + 1 : 0));
           setSelectedActionIndex(-1);
+          setStateScrollOffset(0);
         }
       } else if (activePane === 'actions') {
         if (actions.length === 0) return;
@@ -169,11 +180,19 @@ export const App: React.FC<AppProps> = ({
             const current = prev >= 0 ? prev : actions.length - 1;
             return current > 0 ? current - 1 : 0;
           });
+          setStateScrollOffset(0);
         } else if (key.downArrow || input === 'j') {
           setSelectedActionIndex((prev) => {
             const current = prev >= 0 ? prev : actions.length - 1;
             return current < actions.length - 1 ? current + 1 : actions.length - 1;
           });
+          setStateScrollOffset(0);
+        }
+      } else if (activePane === 'state') {
+        if (key.upArrow || input === 'k') {
+          setStateScrollOffset((prev) => Math.max(0, prev - 1));
+        } else if (key.downArrow || input === 'j') {
+          setStateScrollOffset((prev) => prev + 1);
         }
       }
     },
@@ -226,13 +245,15 @@ export const App: React.FC<AppProps> = ({
           previousAction={previousAction}
           fallbackState={currentStore?.currentState}
           viewMode={viewMode}
+          isFocused={activePane === 'state'}
+          scrollOffset={stateScrollOffset}
         />
       </Box>
 
       {/* Footer */}
       <Box marginTop={1} justifyContent="space-between">
         <Text color="gray">
-          [Tab] Switch Pane | [↑/↓ or j/k] Navigate | [d] Toggle Diff/Snapshot | [q] Quit
+          [Tab/Shift+Tab] Focus | [↑/↓ or j/k] Navigate | [d] Diff/Snapshot | [q/Esc] Quit
         </Text>
         <Text color="gray">Zustand State Inspector</Text>
       </Box>

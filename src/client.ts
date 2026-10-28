@@ -4,6 +4,9 @@ import { extractActionName } from './action-extractor.js';
 export interface ClientConnectorOptions {
   url?: string;
   sessionId?: string;
+  autoReconnect?: boolean;
+  initialReconnectDelay?: number;
+  maxReconnectDelay?: number;
   WebSocketClass?: typeof WebSocket;
 }
 
@@ -12,6 +15,7 @@ export interface ClientConnection {
   isConnected(): boolean;
   getSessionId(): string;
   send(message: OutgoingTuiMessage): void;
+  registerSyncStore?(syncFn: () => void): () => void;
 }
 
 let globalClient: ClientConnection | null = null;
@@ -31,6 +35,9 @@ function generateSessionId(): string {
 export function connectToTui(options: ClientConnectorOptions = {}): ClientConnection {
   const url = options.url ?? 'ws://localhost:8080';
   const sessionId = options.sessionId ?? generateSessionId();
+  const autoReconnect = options.autoReconnect ?? true;
+  const initialDelay = options.initialReconnectDelay ?? 1000;
+  const maxDelay = options.maxReconnectDelay ?? 10000;
   const WSClass = options.WebSocketClass ?? (typeof WebSocket !== 'undefined' ? WebSocket : undefined);
 
   if (!WSClass) {
@@ -38,26 +45,76 @@ export function connectToTui(options: ClientConnectorOptions = {}): ClientConnec
   }
 
   let connected = false;
+  let isExplicitlyClosed = false;
+  let retryCount = 0;
+  let reconnectTimer: any = null;
   const messageQueue: string[] = [];
-  const ws = new WSClass(url);
+  const registeredSyncCallbacks = new Set<() => void>();
+  let ws: any = null;
 
-  ws.addEventListener('open', () => {
-    connected = true;
-    while (messageQueue.length > 0) {
-      const msg = messageQueue.shift();
-      if (msg) {
-        ws.send(msg);
+  function scheduleReconnect() {
+    if (isExplicitlyClosed || reconnectTimer !== null) {
+      return;
+    }
+    const delay = Math.min(initialDelay * Math.pow(1.5, retryCount), maxDelay);
+    retryCount += 1;
+
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      if (!isExplicitlyClosed) {
+        setupSocket();
+      }
+    }, delay);
+  }
+
+  function setupSocket() {
+    try {
+      ws = new WSClass!(url);
+
+      ws.addEventListener('open', () => {
+        connected = true;
+        retryCount = 0;
+
+        // Re-synchronize all registered stores
+        registeredSyncCallbacks.forEach((sync) => {
+          try {
+            sync();
+          } catch {
+            // ignore sync errors
+          }
+        });
+
+        // Flush any queued messages
+        while (messageQueue.length > 0) {
+          const msg = messageQueue.shift();
+          if (msg) {
+            ws.send(msg);
+          }
+        }
+      });
+
+      ws.addEventListener('close', () => {
+        connected = false;
+        if (!isExplicitlyClosed && autoReconnect) {
+          scheduleReconnect();
+        }
+      });
+
+      ws.addEventListener('error', () => {
+        connected = false;
+        if (!isExplicitlyClosed && autoReconnect) {
+          scheduleReconnect();
+        }
+      });
+    } catch {
+      connected = false;
+      if (!isExplicitlyClosed && autoReconnect) {
+        scheduleReconnect();
       }
     }
-  });
+  }
 
-  ws.addEventListener('close', () => {
-    connected = false;
-  });
-
-  ws.addEventListener('error', () => {
-    connected = false;
-  });
+  setupSocket();
 
   const connection: ClientConnection = {
     isConnected: () => connected,
@@ -69,16 +126,29 @@ export function connectToTui(options: ClientConnectorOptions = {}): ClientConnec
       } as TuiClientMessage;
 
       const serialized = JSON.stringify(fullMessage);
-      if (connected) {
+      if (connected && ws && ws.readyState === 1) {
         ws.send(serialized);
       } else {
         messageQueue.push(serialized);
       }
     },
+    registerSyncStore: (syncFn: () => void) => {
+      registeredSyncCallbacks.add(syncFn);
+      return () => {
+        registeredSyncCallbacks.delete(syncFn);
+      };
+    },
     close: () => {
+      isExplicitlyClosed = true;
       connected = false;
+      if (reconnectTimer !== null) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
       try {
-        ws.close();
+        if (ws) {
+          ws.close();
+        }
       } catch {
         // ignore already closed
       }
@@ -117,15 +187,22 @@ export function registerStore<T>(
     storeName = `Store-${storeCounter}`;
   }
 
+  const broadcastInit = () => {
+    client.send({
+      type: 'INIT_STORE',
+      store: storeName!,
+      state: store.getState(),
+    });
+  };
+
   // Broadcast initial state
-  client.send({
-    type: 'INIT_STORE',
-    store: storeName,
-    state: store.getState(),
-  });
+  broadcastInit();
+
+  // Register re-sync on reconnect
+  const unregisterSync = client.registerSyncStore?.(broadcastInit);
 
   // Subscribe to subsequent state mutations
-  const unsubscribe = store.subscribe((nextState: T) => {
+  const unsubscribeState = store.subscribe((nextState: T) => {
     client.send({
       type: 'SET_STATE',
       store: storeName!,
@@ -133,7 +210,10 @@ export function registerStore<T>(
     });
   });
 
-  return unsubscribe;
+  return () => {
+    unregisterSync?.();
+    unsubscribeState();
+  };
 }
 
 export interface TuiOptions extends ClientConnectorOptions {
@@ -168,7 +248,7 @@ export function tui<T>(
 
   const client =
     clientInstance ??
-    (clientOptions.url || clientOptions.WebSocketClass || clientOptions.sessionId
+    (clientOptions.url || clientOptions.WebSocketClass || clientOptions.sessionId || clientOptions.autoReconnect !== undefined
       ? connectToTui(clientOptions)
       : getDefaultClient());
 
@@ -198,12 +278,19 @@ export function tui<T>(
 
     const state = initializer(setWithAction, get, api);
 
+    const broadcastInit = () => {
+      client.send({
+        type: 'INIT_STORE',
+        store: namedStoreName,
+        state: get ? get() : api.getState ? api.getState() : state,
+      });
+    };
+
     // Initial state registration
-    client.send({
-      type: 'INIT_STORE',
-      store: namedStoreName,
-      state: get ? get() : api.getState ? api.getState() : state,
-    });
+    broadcastInit();
+
+    // Register re-sync on reconnect
+    client.registerSyncStore?.(broadcastInit);
 
     return state;
   };

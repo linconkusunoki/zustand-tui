@@ -141,7 +141,6 @@ describe('client connector', () => {
     expect(initMsg.state).toEqual({ count: 0 });
     expect(typeof initMsg.sessionId).toBe('string');
 
-    // Mutate state
     currentState = { count: 1 };
     listeners.forEach((fn) => fn(currentState));
 
@@ -238,5 +237,70 @@ describe('client connector', () => {
     expect(actionMsg2).toBeDefined();
     expect(actionMsg2.state).toEqual({ count: 10 });
     expect(actionMsg2.sessionId).toBeDefined();
+  });
+
+  it('automatically reconnects when server restarts and re-syncs registered stores', async () => {
+    server = createTuiServer({ port: TEST_PORT });
+    await server.start();
+
+    client = connectToTui({
+      url: `ws://localhost:${TEST_PORT}`,
+      autoReconnect: true,
+      initialReconnectDelay: 50,
+      WebSocketClass: WsWebSocket as unknown as typeof WebSocket,
+    });
+
+    const fakeStore = {
+      getState: () => ({ reconnected: true }),
+      subscribe: () => () => {},
+    };
+
+    registerStore(fakeStore, { name: 'resilient-store', client });
+
+    await new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        if (server?.getStores().length === 1) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 10);
+    });
+
+    expect(server.getStores()[0].name).toBe('resilient-store');
+
+    // Stop server (simulate server restart)
+    await server.stop();
+    server = null;
+
+    await new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        if (!client?.isConnected()) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 10);
+    });
+
+    expect(client.isConnected()).toBe(false);
+
+    // Wait a brief moment, then start a new server instance on the same port
+    await new Promise((r) => setTimeout(r, 60));
+
+    server = createTuiServer({ port: TEST_PORT });
+    await server.start();
+
+    // The client should auto-reconnect and re-send its registered store
+    await new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        if (client?.isConnected() && server?.getStores().length === 1) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 20);
+    });
+
+    expect(client.isConnected()).toBe(true);
+    expect(server.getStores()[0].name).toBe('resilient-store');
+    expect(server.getStores()[0].currentState).toEqual({ reconnected: true });
   });
 });

@@ -5,9 +5,9 @@ Deliver a polished, production-ready developer experience. The TUI supports full
 
 **Blocked by:** 05: Server-Side State Diffing & Sliding Window Memory Protection
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Keyboard navigation operates smoothly across all panes (`Tab` to cycle focus, arrows / `j`/`k` to navigate lists, `d` to toggle diff, `q` or `Esc` to quit).
-- [ ] If the TUI restarts, the client snippet automatically retries the WebSocket connection with exponential backoff until re-established.
-- [ ] Project can be run directly via `npx` or as a globally installed CLI binary.
-- [ ] README provides a clear, copy-pasteable TypeScript middleware snippet and setup instructions.
+- [x] Keyboard navigation operates smoothly across all panes (`Tab` to cycle focus, arrows / `j`/`k` to navigate lists, `d` to toggle diff, `q` or `Esc` to quit).
+- [x] If the TUI restarts, the client snippet automatically retries the WebSocket connection with exponential backoff until re-established.
+- [x] Project can be run directly via `npx` or as a globally installed CLI binary.
+- [x] README provides a clear, copy-pasteable TypeScript middleware snippet and setup instructions.
