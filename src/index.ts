@@ -7,3 +7,4 @@ export * from './ui/App.js';
 export * from './ui/StoreList.js';
 export * from './ui/ActionList.js';
 export * from './ui/StateViewer.js';
+export * from './ui/json-highlighter.js';

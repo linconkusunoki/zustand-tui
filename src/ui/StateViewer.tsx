@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Text } from 'ink';
 import type { ActionRecord } from '../server.js';
 import { computeDiff, DiffEntry } from '../diff.js';
+import { JsonLine } from './json-highlighter.js';
 
 export interface StateViewerProps {
   storeName?: string;
@@ -97,9 +98,7 @@ export const StateViewer: React.FC<StateViewerProps> = ({
       ) : (
         <Box flexDirection="column">
           {visibleJsonLines.map((line, idx) => (
-            <Text key={idx} color="white">
-              {line}
-            </Text>
+            <JsonLine key={idx} line={line} />
           ))}
         </Box>
       )}
