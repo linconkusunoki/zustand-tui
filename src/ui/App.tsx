@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput, useApp, useStdin, useStdout } from 'ink';
-import type { TuiServer, StoreInfo } from '../server.js';
+import type { TuiServer, SessionInfo, StoreInfo } from '../server.js';
 import { StoreList } from './StoreList.js';
 import { ActionList } from './ActionList.js';
 import { StateViewer } from './StateViewer.js';
@@ -9,6 +9,7 @@ export interface AppProps {
   port: number;
   clientCount?: number;
   server?: TuiServer;
+  sessions?: SessionInfo[];
   stores?: StoreInfo[];
   selectedStoreIndex?: number;
   selectedActionIndex?: number;
@@ -19,6 +20,7 @@ export const App: React.FC<AppProps> = ({
   port,
   clientCount,
   server,
+  sessions: propSessions,
   stores: propStores,
   selectedStoreIndex: propSelectedStoreIndex,
   fullscreen,
@@ -54,8 +56,19 @@ export const App: React.FC<AppProps> = ({
     return server ? server.getClientCount() : 0;
   });
 
-  const [stores, setStores] = useState<StoreInfo[]>(() => {
-    return propStores ?? (server ? server.getStores() : []);
+  const [sessions, setSessions] = useState<SessionInfo[]>(() => {
+    if (propSessions) return propSessions;
+    if (propStores) {
+      return [
+        {
+          id: 'default',
+          status: 'active',
+          lastSeen: Date.now(),
+          stores: propStores,
+        },
+      ];
+    }
+    return server ? server.getSessions() : [];
   });
 
   const [activePane, setActivePane] = useState<'stores' | 'actions'>('stores');
@@ -65,10 +78,19 @@ export const App: React.FC<AppProps> = ({
   const [selectedActionIndex, setSelectedActionIndex] = useState<number>(-1);
 
   useEffect(() => {
-    if (propStores !== undefined) {
-      setStores(propStores);
+    if (propSessions !== undefined) {
+      setSessions(propSessions);
+    } else if (propStores !== undefined) {
+      setSessions([
+        {
+          id: 'default',
+          status: 'active',
+          lastSeen: Date.now(),
+          stores: propStores,
+        },
+      ]);
     }
-  }, [propStores]);
+  }, [propSessions, propStores]);
 
   useEffect(() => {
     if (!server) return;
@@ -77,39 +99,25 @@ export const App: React.FC<AppProps> = ({
       setServerClientCount(count);
     };
 
-    const handleStoresChanged = (updatedStores: StoreInfo[]) => {
-      setStores(updatedStores);
-    };
-
-    const handleStoreUpdated = (updatedStore: StoreInfo) => {
-      setStores((prev) => {
-        const index = prev.findIndex((s) => s.name === updatedStore.name);
-        if (index === -1) {
-          return [...prev, updatedStore];
-        }
-        const next = [...prev];
-        next[index] = updatedStore;
-        return next;
-      });
+    const handleSessionsChanged = (updatedSessions: SessionInfo[]) => {
+      setSessions(updatedSessions);
     };
 
     server.on('clientCountChanged', handleCount);
-    server.on('storesChanged', handleStoresChanged);
-    server.on('storeUpdated', handleStoreUpdated);
+    server.on('sessionsChanged', handleSessionsChanged);
 
     return () => {
       server.off('clientCountChanged', handleCount);
-      server.off('storesChanged', handleStoresChanged);
-      server.off('storeUpdated', handleStoreUpdated);
+      server.off('sessionsChanged', handleSessionsChanged);
     };
   }, [server]);
 
+  const allStores = sessions.flatMap((s) => s.stores);
   const clampedStoreIndex =
-    stores.length > 0 ? Math.min(selectedStoreIndex, stores.length - 1) : 0;
-  const currentStore = stores[clampedStoreIndex];
+    allStores.length > 0 ? Math.min(selectedStoreIndex, allStores.length - 1) : 0;
+  const currentStore = allStores[clampedStoreIndex];
   const actions = currentStore?.actions ?? [];
 
-  // Keep selected action pointing to the latest action if uninitialized or new actions arrived
   const effectiveActionIndex =
     selectedActionIndex >= 0 && selectedActionIndex < actions.length
       ? selectedActionIndex
@@ -128,14 +136,14 @@ export const App: React.FC<AppProps> = ({
       }
 
       if (activePane === 'stores') {
-        if (stores.length === 0) return;
+        if (allStores.length === 0) return;
 
         if (key.upArrow || input === 'k') {
-          setSelectedStoreIndex((prev) => (prev > 0 ? prev - 1 : stores.length - 1));
-          setSelectedActionIndex(-1); // Reset action selection to latest
+          setSelectedStoreIndex((prev) => (prev > 0 ? prev - 1 : allStores.length - 1));
+          setSelectedActionIndex(-1);
         } else if (key.downArrow || input === 'j') {
-          setSelectedStoreIndex((prev) => (prev < stores.length - 1 ? prev + 1 : 0));
-          setSelectedActionIndex(-1); // Reset action selection to latest
+          setSelectedStoreIndex((prev) => (prev < allStores.length - 1 ? prev + 1 : 0));
+          setSelectedActionIndex(-1);
         }
       } else if (activePane === 'actions') {
         if (actions.length === 0) return;
@@ -185,8 +193,8 @@ export const App: React.FC<AppProps> = ({
       {/* 3-Pane Body */}
       <Box flexDirection="row" flexGrow={1} minHeight={8}>
         <StoreList
-          stores={stores}
-          selectedIndex={clampedStoreIndex}
+          sessions={sessions}
+          selectedGlobalIndex={clampedStoreIndex}
           isFocused={activePane === 'stores'}
         />
         <ActionList

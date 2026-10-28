@@ -64,6 +64,42 @@ describe('client connector', () => {
     expect(server.getClientCount()).toBe(0);
   });
 
+  it('generates a Session ID and tags all messages with it', async () => {
+    const receivedMessages: any[] = [];
+    server = createTuiServer({ port: TEST_PORT });
+    server.on('message', (msg) => {
+      receivedMessages.push(msg);
+    });
+    await server.start();
+
+    client = connectToTui({
+      url: `ws://localhost:${TEST_PORT}`,
+      sessionId: 'tab-alpha',
+      WebSocketClass: WsWebSocket as unknown as typeof WebSocket,
+    });
+
+    expect(client.getSessionId()).toBe('tab-alpha');
+
+    const fakeStore = {
+      getState: () => ({ status: 'online' }),
+      subscribe: () => () => {},
+    };
+
+    registerStore(fakeStore, { name: 'session-test-store', client });
+
+    await new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        if (receivedMessages.length > 0) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 10);
+    });
+
+    expect(receivedMessages[0].sessionId).toBe('tab-alpha');
+    expect(receivedMessages[0].store).toBe('session-test-store');
+  });
+
   it('registers store, dispatches initial state, and streams state changes', async () => {
     const receivedMessages: any[] = [];
     server = createTuiServer({ port: TEST_PORT });
@@ -100,11 +136,10 @@ describe('client connector', () => {
     });
 
     const initMsg = receivedMessages.find((m) => m.type === 'INIT_STORE');
-    expect(initMsg).toEqual({
-      type: 'INIT_STORE',
-      store: 'counter-store',
-      state: { count: 0 },
-    });
+    expect(initMsg.type).toBe('INIT_STORE');
+    expect(initMsg.store).toBe('counter-store');
+    expect(initMsg.state).toEqual({ count: 0 });
+    expect(typeof initMsg.sessionId).toBe('string');
 
     // Mutate state
     currentState = { count: 1 };
@@ -137,7 +172,6 @@ describe('client connector', () => {
       WebSocketClass: WsWebSocket as unknown as typeof WebSocket,
     });
 
-    // Simulate Zustand create with tui middleware
     let state = { count: 0 };
     const listeners = new Set<(s: any) => void>();
     const api = {
@@ -169,7 +203,6 @@ describe('client connector', () => {
       }, 10);
     });
 
-    // 1. Calling increment() extracts caller name from stack
     storeObj.increment();
 
     await new Promise<void>((resolve) => {
@@ -186,8 +219,8 @@ describe('client connector', () => {
     );
     expect(actionMsg1).toBeDefined();
     expect(actionMsg1.state).toEqual({ count: 1 });
+    expect(actionMsg1.sessionId).toBeDefined();
 
-    // 2. Calling customSet() uses explicit action name
     storeObj.customSet();
 
     await new Promise<void>((resolve) => {
@@ -204,5 +237,6 @@ describe('client connector', () => {
     );
     expect(actionMsg2).toBeDefined();
     expect(actionMsg2.state).toEqual({ count: 10 });
+    expect(actionMsg2.sessionId).toBeDefined();
   });
 });

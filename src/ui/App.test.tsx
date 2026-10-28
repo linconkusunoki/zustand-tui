@@ -43,14 +43,21 @@ describe('App', () => {
     expect(lastFrame()).toContain('Actions');
     expect(lastFrame()).toContain('State');
 
-    // Simulate store with actions
-    server.emit('storesChanged', [
+    server.emit('sessionsChanged', [
       {
-        name: 'cart',
-        currentState: { items: ['apple'], total: 2.5 },
-        actions: [
-          { id: '1', action: '@@INIT', state: { items: [], total: 0 }, timestamp: Date.now() },
-          { id: '2', action: 'addItem', state: { items: ['apple'], total: 2.5 }, timestamp: Date.now() },
+        id: 'sess-1',
+        status: 'active',
+        lastSeen: Date.now(),
+        stores: [
+          {
+            name: 'cart',
+            sessionId: 'sess-1',
+            currentState: { items: ['apple'], total: 2.5 },
+            actions: [
+              { id: '1', action: '@@INIT', state: { items: [], total: 0 }, timestamp: Date.now() },
+              { id: '2', action: 'addItem', state: { items: ['apple'], total: 2.5 }, timestamp: Date.now() },
+            ],
+          },
         ],
       },
     ]);
@@ -66,27 +73,80 @@ describe('App', () => {
     expect(frame).toContain('"total": 2.5');
   });
 
-  it('allows navigating action timeline and inspects historical state snapshot', async () => {
-    const server = createTuiServer({ port: 8994 });
-    const { lastFrame, stdin } = render(<App port={8994} server={server} />);
+  it('renders sessions with active/offline badges and preserves inspection of offline sessions', async () => {
+    const server = createTuiServer({ port: 8995 });
+    const { lastFrame } = render(<App port={8995} server={server} />);
 
     await new Promise((r) => setTimeout(r, 20));
 
-    server.emit('storesChanged', [
+    // Emit two sessions: one active, one offline
+    server.emit('sessionsChanged', [
       {
-        name: 'counter',
-        currentState: { count: 2 },
-        actions: [
-          { id: '1', action: '@@INIT', state: { count: 0 }, timestamp: Date.now() },
-          { id: '2', action: 'increment', state: { count: 1 }, timestamp: Date.now() },
-          { id: '3', action: 'increment', state: { count: 2 }, timestamp: Date.now() },
+        id: 'tab-desktop',
+        status: 'active',
+        lastSeen: Date.now(),
+        stores: [
+          {
+            name: 'search-store',
+            sessionId: 'tab-desktop',
+            currentState: { query: 'camper' },
+            actions: [{ id: '1', action: '@@INIT', state: { query: 'camper' }, timestamp: Date.now() }],
+          },
+        ],
+      },
+      {
+        id: 'tab-mobile',
+        status: 'offline',
+        lastSeen: Date.now() - 5000,
+        stores: [
+          {
+            name: 'checkout-store',
+            sessionId: 'tab-mobile',
+            currentState: { step: 'payment' },
+            actions: [{ id: '1', action: '@@INIT', state: { step: 'payment' }, timestamp: Date.now() }],
+          },
         ],
       },
     ]);
 
     await new Promise((r) => setTimeout(r, 30));
 
-    // Initially displays the latest action snapshot (count: 2)
+    const frame = lastFrame();
+    expect(frame).toContain('tab-desktop');
+    expect(frame).toContain('search-store');
+    expect(frame).toContain('tab-mobile');
+    expect(frame).toContain('[Offline]');
+    expect(frame).toContain('checkout-store');
+  });
+
+  it('allows navigating action timeline and inspects historical state snapshot', async () => {
+    const server = createTuiServer({ port: 8994 });
+    const { lastFrame, stdin } = render(<App port={8994} server={server} />);
+
+    await new Promise((r) => setTimeout(r, 20));
+
+    server.emit('sessionsChanged', [
+      {
+        id: 'main-session',
+        status: 'active',
+        lastSeen: Date.now(),
+        stores: [
+          {
+            name: 'counter',
+            sessionId: 'main-session',
+            currentState: { count: 2 },
+            actions: [
+              { id: '1', action: '@@INIT', state: { count: 0 }, timestamp: Date.now() },
+              { id: '2', action: 'increment', state: { count: 1 }, timestamp: Date.now() },
+              { id: '3', action: 'increment', state: { count: 2 }, timestamp: Date.now() },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    await new Promise((r) => setTimeout(r, 30));
+
     expect(lastFrame()).toContain('"count": 2');
 
     // Press Tab to focus the Actions pane

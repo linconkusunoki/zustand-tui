@@ -1,73 +1,62 @@
 import { WebSocket } from 'ws';
 
-const ws = new WebSocket('ws://localhost:8080');
+function startDemo() {
+  console.log(' Starting Zustand TUI Multi-Session Demo...\n');
 
-ws.on('open', () => {
-  console.log(' Connected to Zustand TUI!\n');
-
-  // 1. Register initial stores
-  ws.send(JSON.stringify({
-    type: 'INIT_STORE',
-    store: 'auth-store',
-    state: { user: null, isAuthenticated: false }
-  }));
-
-  ws.send(JSON.stringify({
-    type: 'INIT_STORE',
-    store: 'booking-store',
-    state: { step: 'search', camperId: null, total: 0 }
-  }));
-
-  console.log('-> Initialized "auth-store" and "booking-store"');
-
-  // 2. Dispatch live actions sequentially every 2 seconds
-  const updates = [
-    {
+  // Client 1: Desktop Tab
+  const ws1 = new WebSocket('ws://localhost:8080');
+  ws1.on('open', () => {
+    console.log(' [tab-desktop] Connected');
+    ws1.send(JSON.stringify({
+      type: 'INIT_STORE',
+      sessionId: 'tab-desktop',
       store: 'auth-store',
-      action: 'loginUser',
-      state: { user: { id: 42, name: 'Lincon', role: 'admin' }, isAuthenticated: true },
-      desc: 'User logged in'
-    },
-    {
-      store: 'booking-store',
-      action: 'selectVehicle',
-      state: { step: 'vehicle_selected', camperId: 'vw-california-t6', total: 450 },
-      desc: 'Selected VW California'
-    },
-    {
-      store: 'booking-store',
-      action: 'addInsurance',
-      state: { step: 'insurance_added', camperId: 'vw-california-t6', total: 530, insurance: 'premium' },
-      desc: 'Added premium insurance'
-    },
-    {
-      store: 'booking-store',
-      action: 'completeBooking',
-      state: { step: 'confirmed', camperId: 'vw-california-t6', total: 530, bookingId: 'BK-99120' },
-      desc: 'Booking completed'
-    }
-  ];
+      state: { user: null, isAuthenticated: false }
+    }));
 
-  let i = 0;
-  const timer = setInterval(() => {
-    if (i < updates.length) {
-      const u = updates[i];
-      ws.send(JSON.stringify({
+    setTimeout(() => {
+      ws1.send(JSON.stringify({
         type: 'ACTION',
-        store: u.store,
-        action: u.action,
-        state: u.state,
+        sessionId: 'tab-desktop',
+        store: 'auth-store',
+        action: 'loginUser',
+        state: { user: { id: 42, name: 'Lincon', role: 'admin' }, isAuthenticated: true },
         timestamp: Date.now()
       }));
-      console.log(`[${new Date().toLocaleTimeString()}] Dispatched "${u.action}" to ${u.store}: "${u.desc}"`);
-      i++;
-    } else {
-      clearInterval(timer);
-      console.log('\n Dispatches complete. Keep TUI open to inspect, or press Ctrl+C to exit.');
-    }
-  }, 2000);
-});
+      console.log(' [tab-desktop] Dispatched "loginUser"');
+    }, 2000);
+  });
 
-ws.on('error', (err) => {
-  console.error('Connection error. Is the TUI running on port 8080?', err.message);
-});
+  // Client 2: Mobile Tab
+  const ws2 = new WebSocket('ws://localhost:8080');
+  ws2.on('open', () => {
+    console.log(' [tab-mobile] Connected');
+    ws2.send(JSON.stringify({
+      type: 'INIT_STORE',
+      sessionId: 'tab-mobile',
+      store: 'booking-store',
+      state: { step: 'search', camperId: null, total: 0 }
+    }));
+
+    setTimeout(() => {
+      ws2.send(JSON.stringify({
+        type: 'ACTION',
+        sessionId: 'tab-mobile',
+        store: 'booking-store',
+        action: 'selectVehicle',
+        state: { step: 'vehicle_selected', camperId: 'vw-california-t6', total: 450 },
+        timestamp: Date.now()
+      }));
+      console.log(' [tab-mobile] Dispatched "selectVehicle"');
+    }, 3000);
+
+    // Disconnect mobile tab after 6s to show [Offline] badge in TUI
+    setTimeout(() => {
+      console.log(' [tab-mobile] Closing connection (simulating closed tab/page unload)...');
+      ws2.close();
+      console.log(' [tab-mobile] Disconnected -> Notice [Offline] badge in TUI! State remains inspectable.');
+    }, 6000);
+  });
+}
+
+startDemo();

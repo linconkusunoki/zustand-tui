@@ -1,15 +1,17 @@
-import type { TuiClientMessage } from './protocol.js';
+import type { TuiClientMessage, OutgoingTuiMessage } from './protocol.js';
 import { extractActionName } from './action-extractor.js';
 
 export interface ClientConnectorOptions {
   url?: string;
+  sessionId?: string;
   WebSocketClass?: typeof WebSocket;
 }
 
 export interface ClientConnection {
   close(): void;
   isConnected(): boolean;
-  send(message: TuiClientMessage): void;
+  getSessionId(): string;
+  send(message: OutgoingTuiMessage): void;
 }
 
 let globalClient: ClientConnection | null = null;
@@ -19,8 +21,16 @@ export function resetStoreCounter(): void {
   storeCounter = 0;
 }
 
+function generateSessionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().slice(0, 8);
+  }
+  return Math.random().toString(36).slice(2, 10);
+}
+
 export function connectToTui(options: ClientConnectorOptions = {}): ClientConnection {
   const url = options.url ?? 'ws://localhost:8080';
+  const sessionId = options.sessionId ?? generateSessionId();
   const WSClass = options.WebSocketClass ?? (typeof WebSocket !== 'undefined' ? WebSocket : undefined);
 
   if (!WSClass) {
@@ -51,8 +61,14 @@ export function connectToTui(options: ClientConnectorOptions = {}): ClientConnec
 
   const connection: ClientConnection = {
     isConnected: () => connected,
-    send: (message: TuiClientMessage) => {
-      const serialized = JSON.stringify(message);
+    getSessionId: () => sessionId,
+    send: (message: OutgoingTuiMessage) => {
+      const fullMessage: TuiClientMessage = {
+        ...message,
+        sessionId: message.sessionId ?? sessionId,
+      } as TuiClientMessage;
+
+      const serialized = JSON.stringify(fullMessage);
       if (connected) {
         ws.send(serialized);
       } else {
@@ -152,7 +168,7 @@ export function tui<T>(
 
   const client =
     clientInstance ??
-    (clientOptions.url || clientOptions.WebSocketClass
+    (clientOptions.url || clientOptions.WebSocketClass || clientOptions.sessionId
       ? connectToTui(clientOptions)
       : getDefaultClient());
 
