@@ -24,7 +24,7 @@ By participating in this project, you agree to abide by our [Code of Conduct](CO
 
 1. **Fork and clone** the repository:
    ```bash
-   git clone https://github.com/lincon/zustand-tui.git
+   git clone https://github.com/linconkusunoki/zustand-tui.git
    cd zustand-tui
    ```
 

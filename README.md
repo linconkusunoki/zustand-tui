@@ -4,7 +4,7 @@
 
 **A high-performance, interactive Terminal User Interface (TUI) to inspect, time-travel, and debug Zustand state in real-time.**
 
-[![CI](https://github.com/lincon/zustand-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/lincon/zustand-tui/actions/workflows/ci.yml)
+[![CI](https://github.com/linconkusunoki/zustand-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/linconkusunoki/zustand-tui/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![npm version](https://img.shields.io/npm/v/zustand-tui.svg?color=green)](https://www.npmjs.com/package/zustand-tui)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue?logo=typescript)](https://www.typescriptlang.org/)
@@ -206,7 +206,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for loca
 
 ```bash
 # Clone the repository
-git clone https://github.com/lincon/zustand-tui.git
+git clone https://github.com/linconkusunoki/zustand-tui.git
 cd zustand-tui
 
 # Install dependencies

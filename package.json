@@ -27,8 +27,16 @@
     "devtools",
     "terminal"
   ],
-  "author": "",
+  "author": "Lincon Kusunoki <linconkusunoki@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/linconkusunoki/zustand-tui.git"
+  },
+  "bugs": {
+    "url": "https://github.com/linconkusunoki/zustand-tui/issues"
+  },
+  "homepage": "https://github.com/linconkusunoki/zustand-tui#readme",
   "dependencies": {
     "chalk": "^5.4.1",
     "ink": "^5.1.0",
