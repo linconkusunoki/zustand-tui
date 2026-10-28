@@ -1,6 +1,23 @@
-# Zustand TUI
+<div align="center">
 
-A high-performance, interactive **Terminal User Interface (TUI)** to inspect and debug [Zustand](https://zustand.docs.pmnd.rs/) state in real-time, inspired by tools like `rainfrog` and Redux DevTools.
+# 🐻 Zustand TUI
+
+**A high-performance, interactive Terminal User Interface (TUI) to inspect, time-travel, and debug Zustand state in real-time.**
+
+[![CI](https://github.com/lincon/zustand-tui/actions/workflows/ci.yml/badge.svg)](https://github.com/lincon/zustand-tui/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/zustand-tui.svg?color=green)](https://www.npmjs.com/package/zustand-tui)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Strict-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![Zustand](https://img.shields.io/badge/Zustand-v4%20%7C%20v5-orange)](https://zustand.docs.pmnd.rs/)
+
+[Features](#-features) •
+[Quickstart](#-quickstart) •
+[Drop-in Snippet](#-drop-in-client-snippet) •
+[Keyboard Navigation](#-keyboard-navigation) •
+[Architecture](#-architecture) •
+[Contributing](#-contributing)
+
+<br/>
 
 ```text
 ╭─────────────────────────────────────────────────────────────────────────────────────────────╮
@@ -19,11 +36,14 @@ A high-performance, interactive **Terminal User Interface (TUI)** to inspect and
 ╰─────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
+</div>
+
 ---
 
-## Features
+## ⚡ Features
 
-- 🖥️ **Full-Screen Terminal Experience**: Runs in your terminal's alternate buffer (like `htop` or `vim`) with automatic resizing and clean shell restoration upon exit.
+- 🖥️ **Full-Screen Terminal Experience**: Runs in your terminal's alternate buffer (like `htop`, `vim`, or `rainfrog`) with dynamic viewport sizing and clean shell restoration upon exit.
+- 🎨 **JSON Syntax Highlighting**: Color-codes JSON keys (`cyan`), strings (`green`), numbers (`yellow`), booleans (`magenta`), null (`dimmed`), and structural braces (`gray`).
 - ⚡ **Zero-Dependency Integration**: No heavy browser extensions or bloated npm packages required in your web app. Just a lightweight, copy-pasteable TypeScript snippet.
 - 🔄 **Real-Time 3-Pane Layout**:
   - **Stores (Left)**: Multi-session grouping (desktop tabs, mobile, SSR) with `[Offline]` state retention on disconnect.
@@ -35,23 +55,26 @@ A high-performance, interactive **Terminal User Interface (TUI)** to inspect and
 
 ---
 
-## Quickstart
+## 🚀 Quickstart
 
 ### 1. Launch the TUI in your terminal
 
-```bash
-# Run directly with npx
-npx zustand-tui
+No installation required—run directly using `npx`:
 
-# Or with a custom port
+```bash
+npx zustand-tui
+```
+
+Custom port:
+```bash
 npx zustand-tui --port 8080
 ```
 
 ---
 
-### 2. Add the Drop-in Snippet to your project
+## 📦 Drop-in Client Snippet
 
-Create a file named `zustand-tui.ts` in your frontend project (e.g., in `src/utils/zustand-tui.ts`):
+Add this single zero-dependency file to your application (e.g., at `src/utils/zustand-tui.ts`):
 
 ```typescript
 // zustand-tui.ts (Zero-dependency drop-in snippet)
@@ -121,11 +144,7 @@ export function tui<T>(storeName?: string, options: TuiOptions = {}) {
 }
 ```
 
----
-
-### 3. Wrap your Zustand store
-
-Simply wrap your store creator function with `tui('myStoreName')`:
+### Wrap your Zustand store
 
 ```typescript
 import { create } from 'zustand';
@@ -140,22 +159,45 @@ export const useBearStore = create(
 );
 ```
 
-Every action and state mutation will now stream live into your terminal!
+As actions are dispatched in your app, they immediately stream into the TUI in real-time!
 
 ---
 
-## Keyboard Navigation
+## ⌨️ Keyboard Navigation
 
 | Key | Action |
 | --- | --- |
-| `Tab` / `Shift+Tab` | Cycle focus between panes (`Stores` ➔ `Actions` ➔ `State`) |
-| `↑` / `↓` or `k` / `j` | Navigate items in the focused pane / scroll state |
+| `Tab` | Cycle focus forward (`Stores` ➔ `Actions` ➔ `State`) |
+| `Shift + Tab` | Cycle focus backward (`State` ➔ `Actions` ➔ `Stores`) |
+| `↑` / `↓` or `k` / `j` | Navigate items in the active pane / scroll JSON state |
 | `d` | Toggle right pane between `[Snapshot]` and `[Diff]` view |
-| `q` or `Esc` | Quit TUI cleanly |
+| `q` or `Esc` | Quit TUI cleanly and restore terminal |
 
 ---
 
-## Development & Testing
+## 📐 Architecture
+
+```text
+┌─────────────────────────┐          WebSocket           ┌───────────────────────────┐
+│     Web Application     │  ─────────────────────────>  │        Zustand TUI        │
+│                         │                              │                           │
+│  - Zustand Stores       │  - INIT_STORE (snapshot)     │  - Embedded WS Server     │
+│  - tui() Middleware     │  - ACTION (name, diff state) │  - Session / Store Tree   │
+│  - Caller Stack Trace   │  - JSON Payloads             │  - Action History Window  │
+│  - Auto-reconnection    │                              │  - Full-screen Ink Engine │
+└─────────────────────────┘                              └───────────────────────────┘
+```
+
+1. **Embedded WebSocket Server**: Runs locally on `localhost:8080`.
+2. **Session Isolation**: Each tab/process gets a unique Session ID to isolate stores.
+3. **Diff Engine**: Diffs are computed server-side in Node.js, keeping the client runtime featherlight.
+4. **Memory Guard**: Sliding-window buffer limits in-memory action retention per store.
+
+---
+
+## 🛠️ Development & Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for local development setup, coding standards, and pull request guidelines.
 
 ```bash
 # Clone the repository
@@ -165,10 +207,10 @@ cd zustand-tui
 # Install dependencies
 npm install
 
-# Run the TUI in dev mode
+# Run the TUI in development mode
 npm run dev
 
-# Run the live multi-session demo script
+# Run the live simulation demo
 npm run demo
 
 # Run test suite
@@ -181,6 +223,8 @@ npm run build
 
 ---
 
-## License
+## 📄 License
 
-MIT © Lincon Kusunoki
+This project is open-source software licensed under the [MIT License](LICENSE).
+
+© 2026 Lincon Kusunoki
