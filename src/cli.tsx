@@ -10,13 +10,27 @@ const port = !isNaN(cliPort) ? cliPort : (Number(process.env.PORT) || 8080);
 
 const server = createTuiServer({ port });
 
+const enterAltScreen = () => {
+  if (process.stdout.isTTY) {
+    process.stdout.write('\x1b[?1049h\x1b[H');
+  }
+};
+
+const exitAltScreen = () => {
+  if (process.stdout.isTTY) {
+    process.stdout.write('\x1b[?1049l');
+  }
+};
+
 async function main() {
+  enterAltScreen();
   await server.start();
   const { unmount, waitUntilExit } = render(<App port={port} server={server} />);
 
   const cleanup = async () => {
     unmount();
     await server.stop();
+    exitAltScreen();
     process.exit(0);
   };
 
@@ -25,10 +39,12 @@ async function main() {
 
   await waitUntilExit();
   await server.stop();
+  exitAltScreen();
 }
 
 main().catch(async (err) => {
   console.error('Failed to start Zustand TUI:', err);
   await server.stop();
+  exitAltScreen();
   process.exit(1);
 });

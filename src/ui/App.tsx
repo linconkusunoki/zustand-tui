@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput, useApp, useStdin } from 'ink';
+import { Box, Text, useInput, useApp, useStdin, useStdout } from 'ink';
 import type { TuiServer, StoreInfo } from '../server.js';
 import { StoreList } from './StoreList.js';
 import { StateViewer } from './StateViewer.js';
@@ -10,6 +10,7 @@ export interface AppProps {
   server?: TuiServer;
   stores?: StoreInfo[];
   selectedStoreIndex?: number;
+  fullscreen?: boolean;
 }
 
 export const App: React.FC<AppProps> = ({
@@ -18,9 +19,35 @@ export const App: React.FC<AppProps> = ({
   server,
   stores: propStores,
   selectedStoreIndex: propSelectedStoreIndex,
+  fullscreen,
 }) => {
   const { exit } = useApp();
   const { isRawModeSupported } = useStdin();
+  const { stdout } = useStdout();
+
+  const isFullscreen = fullscreen ?? Boolean(stdout?.isTTY);
+
+  const [dimensions, setDimensions] = useState(() => ({
+    columns: stdout?.columns ?? 80,
+    rows: stdout?.rows ?? 24,
+  }));
+
+  useEffect(() => {
+    if (!stdout) return;
+
+    const handleResize = () => {
+      setDimensions({
+        columns: stdout.columns ?? 80,
+        rows: stdout.rows ?? 24,
+      });
+    };
+
+    stdout.on('resize', handleResize);
+    return () => {
+      stdout.off('resize', handleResize);
+    };
+  }, [stdout]);
+
   const [serverClientCount, setServerClientCount] = useState<number>(() => {
     return server ? server.getClientCount() : 0;
   });
@@ -96,7 +123,15 @@ export const App: React.FC<AppProps> = ({
   const selectedStore = stores[clampedIndex];
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor="cyan"
+      paddingX={1}
+      width={isFullscreen ? dimensions.columns : undefined}
+      height={isFullscreen ? dimensions.rows : undefined}
+      justifyContent="space-between"
+    >
       {/* Header */}
       <Box justifyContent="space-between" marginBottom={1}>
         <Text bold color="green">
@@ -111,7 +146,7 @@ export const App: React.FC<AppProps> = ({
       </Box>
 
       {/* 2-Pane Body */}
-      <Box flexDirection="row" minHeight={8}>
+      <Box flexDirection="row" flexGrow={1} minHeight={8}>
         <StoreList stores={stores} selectedIndex={clampedIndex} />
         <StateViewer store={selectedStore} />
       </Box>
