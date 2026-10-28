@@ -79,7 +79,6 @@ describe('App', () => {
 
     await new Promise((r) => setTimeout(r, 20));
 
-    // Emit two sessions: one active, one offline
     server.emit('sessionsChanged', [
       {
         id: 'tab-desktop',
@@ -164,5 +163,55 @@ describe('App', () => {
     await new Promise((r) => setTimeout(r, 30));
 
     expect(lastFrame()).toContain('"count": 0');
+  });
+
+  it('toggles between Snapshot and Diff view with "d" key', async () => {
+    const server = createTuiServer({ port: 8996 });
+    const { lastFrame, stdin } = render(<App port={8996} server={server} />);
+
+    await new Promise((r) => setTimeout(r, 20));
+
+    server.emit('sessionsChanged', [
+      {
+        id: 'sess-diff',
+        status: 'active',
+        lastSeen: Date.now(),
+        stores: [
+          {
+            name: 'profile',
+            sessionId: 'sess-diff',
+            currentState: { name: 'Bob', age: 31 },
+            actions: [
+              { id: '1', action: '@@INIT', state: { name: 'Alice', age: 30 }, timestamp: Date.now() },
+              { id: '2', action: 'updateProfile', state: { name: 'Bob', age: 31 }, timestamp: Date.now() },
+            ],
+          },
+        ],
+      },
+    ]);
+
+    await new Promise((r) => setTimeout(r, 30));
+
+    // By default in Snapshot mode
+    expect(lastFrame()).toContain('[Snapshot]');
+    expect(lastFrame()).toContain('"name": "Bob"');
+
+    // Press 'd' to toggle into Diff view
+    stdin.write('d');
+    await new Promise((r) => setTimeout(r, 30));
+
+    const diffFrame = lastFrame();
+    expect(diffFrame).toContain('[Diff]');
+    // Should show visual diff lines for modified keys
+    expect(diffFrame).toContain('name');
+    expect(diffFrame).toContain('"Alice" => "Bob"');
+    expect(diffFrame).toContain('30 => 31');
+
+    // Press 'd' again to toggle back to Snapshot mode
+    stdin.write('d');
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(lastFrame()).toContain('[Snapshot]');
+    expect(lastFrame()).toContain('"name": "Bob"');
   });
 });

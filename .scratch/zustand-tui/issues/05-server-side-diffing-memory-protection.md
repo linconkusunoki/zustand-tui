@@ -5,9 +5,9 @@ Provide deep inspection of state mutations and protect against unbounded memory 
 
 **Blocked by:** 04: Multi-Session Grouping & Offline State Retention
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] TUI calculates property-level additions, removals, and modifications between consecutive state snapshots.
-- [ ] Pressing a hotkey toggles the right pane between the full state snapshot and the visual diff highlighting changed keys.
-- [ ] The TUI sliding window discards the oldest actions beyond the 100-action limit per store to preserve memory.
-- [ ] High-frequency state updates (e.g. rapid dispatches) do not cause UI lag or out-of-memory crashes.
+- [x] TUI calculates property-level additions, removals, and modifications between consecutive state snapshots.
+- [x] Pressing a hotkey toggles the right pane between the full state snapshot and the visual diff highlighting changed keys.
+- [x] The TUI sliding window discards the oldest actions beyond the 100-action limit per store to preserve memory.
+- [x] High-frequency state updates (e.g. rapid dispatches) do not cause UI lag or out-of-memory crashes.

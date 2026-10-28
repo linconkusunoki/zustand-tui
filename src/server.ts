@@ -4,6 +4,7 @@ import type { TuiClientMessage } from './protocol.js';
 
 export interface TuiServerOptions {
   port?: number;
+  maxActionsPerStore?: number;
 }
 
 export interface ActionRecord {
@@ -39,6 +40,7 @@ export interface TuiServer extends EventEmitter {
 
 export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
   const port = options.port ?? 8080;
+  const maxActions = options.maxActionsPerStore ?? 100;
   const emitter = new EventEmitter() as TuiServer;
   let wss: WebSocketServer | null = null;
   const clients = new Set<WebSocket>();
@@ -172,6 +174,9 @@ export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
                 };
 
                 storeInfo.actions.push(actionRecord);
+                if (storeInfo.actions.length > maxActions) {
+                  storeInfo.actions = storeInfo.actions.slice(-maxActions);
+                }
                 storeInfo.currentState = msg.state;
 
                 emitter.emit('actionDispatched', msg.store, actionRecord, sessionId);

@@ -119,7 +119,6 @@ describe('TuiServer', () => {
     const client1 = new WebSocket(`ws://localhost:${TEST_PORT}`);
     await new Promise<void>((resolve) => client1.on('open', () => resolve()));
 
-    // Client 1 registers store in session 'tab-1'
     client1.send(
       JSON.stringify({
         type: 'INIT_STORE',
@@ -132,7 +131,6 @@ describe('TuiServer', () => {
     const client2 = new WebSocket(`ws://localhost:${TEST_PORT}`);
     await new Promise<void>((resolve) => client2.on('open', () => resolve()));
 
-    // Client 2 registers store in session 'tab-2'
     client2.send(
       JSON.stringify({
         type: 'INIT_STORE',
@@ -177,15 +175,63 @@ describe('TuiServer', () => {
       }, 10);
     });
 
-    // Session 1 is offline, but its store state is preserved!
     const updatedSession1 = server.getSessions().find((s) => s.id === 'tab-1');
     expect(updatedSession1?.status).toBe('offline');
     expect(updatedSession1?.stores[0].currentState).toEqual({ items: ['laptop'] });
 
-    // Session 2 is still active
     const updatedSession2 = server.getSessions().find((s) => s.id === 'tab-2');
     expect(updatedSession2?.status).toBe('active');
 
     client2.close();
+  });
+
+  it('enforces sliding window limit on actions to prevent unbounded memory growth', async () => {
+    // Configure server with max 3 actions per store
+    server = createTuiServer({ port: TEST_PORT, maxActionsPerStore: 3 });
+    await server.start();
+
+    const client = new WebSocket(`ws://localhost:${TEST_PORT}`);
+    await new Promise<void>((resolve) => client.on('open', () => resolve()));
+
+    client.send(
+      JSON.stringify({
+        type: 'INIT_STORE',
+        sessionId: 'bench',
+        store: 'bench-store',
+        state: { val: 0 },
+      })
+    );
+
+    // Dispatch 5 sequential actions
+    for (let i = 1; i <= 5; i++) {
+      client.send(
+        JSON.stringify({
+          type: 'ACTION',
+          sessionId: 'bench',
+          store: 'bench-store',
+          action: `act-${i}`,
+          state: { val: i },
+          timestamp: Date.now() + i,
+        })
+      );
+    }
+
+    await new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        const actions = server?.getStoreActions('bench-store');
+        if (actions?.some((a) => a.action === 'act-5')) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 10);
+    });
+
+    const actions = server.getStoreActions('bench-store');
+    // Bounded to maxActionsPerStore: 3
+    expect(actions.length).toBe(3);
+    // Oldest actions were pruned; newest 3 retained: act-3, act-4, act-5
+    expect(actions.map((a) => a.action)).toEqual(['act-3', 'act-4', 'act-5']);
+
+    client.close();
   });
 });

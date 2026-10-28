@@ -13,6 +13,7 @@ export interface AppProps {
   stores?: StoreInfo[];
   selectedStoreIndex?: number;
   selectedActionIndex?: number;
+  viewMode?: 'snapshot' | 'diff';
   fullscreen?: boolean;
 }
 
@@ -23,6 +24,7 @@ export const App: React.FC<AppProps> = ({
   sessions: propSessions,
   stores: propStores,
   selectedStoreIndex: propSelectedStoreIndex,
+  viewMode: propViewMode,
   fullscreen,
 }) => {
   const { exit } = useApp();
@@ -76,6 +78,15 @@ export const App: React.FC<AppProps> = ({
     return propSelectedStoreIndex ?? 0;
   });
   const [selectedActionIndex, setSelectedActionIndex] = useState<number>(-1);
+  const [viewMode, setViewMode] = useState<'snapshot' | 'diff'>(() => {
+    return propViewMode ?? 'snapshot';
+  });
+
+  useEffect(() => {
+    if (propViewMode !== undefined) {
+      setViewMode(propViewMode);
+    }
+  }, [propViewMode]);
 
   useEffect(() => {
     if (propSessions !== undefined) {
@@ -130,6 +141,11 @@ export const App: React.FC<AppProps> = ({
         return;
       }
 
+      if (input === 'd') {
+        setViewMode((prev) => (prev === 'snapshot' ? 'diff' : 'snapshot'));
+        return;
+      }
+
       if (key.tab) {
         setActivePane((prev) => (prev === 'stores' ? 'actions' : 'stores'));
         return;
@@ -166,6 +182,8 @@ export const App: React.FC<AppProps> = ({
 
   const activeCount = server ? serverClientCount : (clientCount ?? 0);
   const currentAction = actions[effectiveActionIndex];
+  const previousAction =
+    effectiveActionIndex > 0 ? actions[effectiveActionIndex - 1] : undefined;
 
   return (
     <Box
@@ -205,13 +223,17 @@ export const App: React.FC<AppProps> = ({
         <StateViewer
           storeName={currentStore?.name}
           action={currentAction}
+          previousAction={previousAction}
           fallbackState={currentStore?.currentState}
+          viewMode={viewMode}
         />
       </Box>
 
       {/* Footer */}
       <Box marginTop={1} justifyContent="space-between">
-        <Text color="gray">[Tab] Switch Pane | [↑/↓ or j/k] Navigate | [q] Quit</Text>
+        <Text color="gray">
+          [Tab] Switch Pane | [↑/↓ or j/k] Navigate | [d] Toggle Diff/Snapshot | [q] Quit
+        </Text>
         <Text color="gray">Zustand State Inspector</Text>
       </Box>
     </Box>
