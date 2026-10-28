@@ -60,7 +60,7 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement at
-[lincon.kusunoki@camperdays.com](mailto:lincon.kusunoki@camperdays.com).
+[linconkusunoki@gmail.com](mailto:linconkusunoki@gmail.com).
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the

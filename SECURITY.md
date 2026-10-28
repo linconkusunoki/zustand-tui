@@ -10,7 +10,7 @@
 
 If you discover a security vulnerability in **Zustand TUI**, please report it responsibly:
 
-- **Email**: Send vulnerability reports directly to [lincon.kusunoki@camperdays.com](mailto:lincon.kusunoki@camperdays.com).
+- **Email**: Send vulnerability reports directly to [linconkusunoki@gmail.com](mailto:linconkusunoki@gmail.com).
 - Please **do not** report vulnerabilities through public GitHub issues.
 - Include a detailed description of the vulnerability, steps to reproduce, and any proof-of-concept scripts.
 
