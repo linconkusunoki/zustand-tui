@@ -29,12 +29,12 @@
 │ Zustand TUI                                   Listening on port 8080 | Connected clients: 1 │
 │                                                                                             │
 │ ┌──────────────────────┐┌───────────────────────────┐┌────────────────────────────────────┐ │
-│ │ Stores (2)           ││ Actions (4)               ││ State (booking @ selectVehicle) [Diff]│ │
+│ │ Stores (2)           ││ Actions (4)               ││ State (cart @ applyCoupon) [Diff]  │ │
 │ │                      ││                           ││                                    │ │
-│ │ tab-desktop (active) ││   @@INIT      3:30:12 PM  ││ ~ step: "search" => "vehicle_sel.. │ │
-│ │  > auth-store        ││   loginUser   3:30:14 PM  ││ + camperId: "vw-california-t6"     │ │
-│ │ tab-mobile  (active) ││ > selectVehicl3:30:16 PM  ││ ~ total: 0 => 450                  │ │
-│ │    booking-store     ││   addInsurance3:30:18 PM  ││                                    │ │
+│ │ tab-desktop (active) ││   @@INIT      3:30:12 PM  ││ + coupon: "SUMMER20"               │ │
+│ │   auth-store         ││   addItem     3:30:14 PM  ││ + discount: 24                     │ │
+│ │ tab-mobile  (active) ││ > applyCoupon 3:30:16 PM  ││ ~ total: 120 => 96                 │ │
+│ │  > cart-store        ││   checkoutOrde3:30:18 PM  ││                                    │ │
 │ └──────────────────────┘└───────────────────────────┘└────────────────────────────────────┘ │
 │                                                                                             │
 │ [Tab/Shift+Tab] Focus | [↑/↓ or j/k] Navigate | [d] Diff/Snapshot | [q/Esc] Quit            │

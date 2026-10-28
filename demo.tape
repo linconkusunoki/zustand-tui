@@ -14,10 +14,10 @@ Enter
 # Let TUI boot and initial stores register
 Sleep 3.5s
 
-# Allow actions to stream in
+# Allow dispatches to stream in
 Sleep 3s
 
-# Navigate down to booking-store
+# Navigate down to cart-store
 Down
 Sleep 1.5s
 
@@ -25,7 +25,7 @@ Sleep 1.5s
 Tab
 Sleep 1.5s
 
-# Navigate actions timeline
+# Navigate to addItem action
 Down
 Sleep 1.5s
 
@@ -33,11 +33,13 @@ Sleep 1.5s
 Type "d"
 Sleep 2.5s
 
-Down
-Sleep 1.5s
-
+# Navigate to applyCoupon action
 Down
 Sleep 2s
+
+# Navigate to checkoutOrder action
+Down
+Sleep 2.5s
 
 # Toggle back to Snapshot view
 Type "d"
@@ -47,7 +49,7 @@ Sleep 2s
 Tab
 Sleep 1.5s
 
-# Scroll down JSON state
+# Scroll down syntax-highlighted JSON state
 Down
 Sleep 500ms
 Down
