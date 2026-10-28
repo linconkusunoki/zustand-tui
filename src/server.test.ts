@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { WebSocket } from 'ws';
-import { createTuiServer, TuiServer } from './server.js';
+import { createTuiServer, TuiServer, StoreInfo } from './server.js';
 
 describe('TuiServer', () => {
   let server: TuiServer | null = null;
@@ -38,5 +38,64 @@ describe('TuiServer', () => {
     await new Promise<void>((resolve) => client2.on('close', () => resolve()));
 
     expect(server.getClientCount()).toBe(0);
+  });
+
+  it('tracks stores, updates current state, and emits events', async () => {
+    server = createTuiServer({ port: TEST_PORT });
+    const storeUpdates: StoreInfo[] = [];
+    server.on('storeUpdated', (info) => {
+      storeUpdates.push(info);
+    });
+    await server.start();
+
+    const client = new WebSocket(`ws://localhost:${TEST_PORT}`);
+    await new Promise<void>((resolve) => client.on('open', () => resolve()));
+
+    // Register store A
+    client.send(
+      JSON.stringify({
+        type: 'INIT_STORE',
+        store: 'auth',
+        state: { user: null, isLoggedIn: false },
+      })
+    );
+
+    await new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        if (server?.getStores().length === 1) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 10);
+    });
+
+    expect(server.getStores()).toEqual([
+      { name: 'auth', currentState: { user: null, isLoggedIn: false } },
+    ]);
+
+    // Update store A
+    client.send(
+      JSON.stringify({
+        type: 'SET_STATE',
+        store: 'auth',
+        state: { user: { id: 1, name: 'Alice' }, isLoggedIn: true },
+      })
+    );
+
+    await new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        if (storeUpdates.length >= 2) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 10);
+    });
+
+    expect(server.getStores()[0]).toEqual({
+      name: 'auth',
+      currentState: { user: { id: 1, name: 'Alice' }, isLoggedIn: true },
+    });
+
+    client.close();
   });
 });

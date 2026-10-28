@@ -5,9 +5,9 @@ Extend the client snippet to transmit initial state and ongoing mutations for a 
 
 **Blocked by:** 01: Walking Skeleton: CLI & Client Ping
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Client snippet accepts a store name (or falls back to `Store-N`) and broadcasts initial state upon registration.
-- [ ] TUI left pane displays the list of registered stores with selection highlighting.
-- [ ] TUI right pane displays formatted JSON of the currently selected store's state.
-- [ ] State changes triggered in the application update the displayed JSON in real-time without flickering.
+- [x] Client snippet accepts a store name (or falls back to `Store-N`) and broadcasts initial state upon registration.
+- [x] TUI left pane displays the list of registered stores with selection highlighting.
+- [x] TUI right pane displays formatted JSON of the currently selected store's state.
+- [x] State changes triggered in the application update the displayed JSON in real-time without flickering.
