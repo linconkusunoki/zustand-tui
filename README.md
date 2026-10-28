@@ -18,6 +18,11 @@
 [Contributing](#-contributing)
 
 <br/>
+<br/>
+
+<img src="demo.gif" alt="Zustand TUI Live Demo" width="850" />
+
+<br/>
 
 ```text
 ╭─────────────────────────────────────────────────────────────────────────────────────────────╮
