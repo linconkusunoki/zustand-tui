@@ -15,8 +15,16 @@ describe('e2e walking skeleton and store registration', () => {
   });
 
   it('runs the CLI, registers a store, and reflects live action history', async () => {
+    // In CI environments (e.g. GitHub Actions), Ink suppresses live stdout rendering unless CI is set to 'false'
+    const testEnv = {
+      ...process.env,
+      CI: 'false',
+      CONTINUOUS_INTEGRATION: 'false',
+    };
+
     cliProcess = spawn('node', ['./dist/cli.js', '--port', String(TEST_PORT)], {
       cwd: process.cwd(),
+      env: testEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
