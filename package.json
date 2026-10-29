@@ -5,7 +5,8 @@
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "zustand-tui": "dist/cli.js"
+    "zustand-tui": "dist/cli.js",
+    "zustand-mcp": "dist/mcp-cli.js"
   },
   "files": [
     "dist",
@@ -38,6 +39,7 @@
   },
   "homepage": "https://github.com/linconkusunoki/zustand-tui#readme",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "chalk": "^5.4.1",
     "ink": "^5.1.0",
     "react": "^18.3.1",

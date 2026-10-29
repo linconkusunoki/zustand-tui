@@ -60,20 +60,74 @@
 
 ---
 
-## 🚀 Quickstart
+## 🚀 Quickstart: Single Command for Humans & AI Agents
 
-### 1. Launch the TUI in your terminal
-
-No installation required—run directly using `npx`:
+Running `npx zustand-tui` launches **both** the interactive Terminal UI and the embedded MCP Server simultaneously from a single command:
 
 ```bash
 npx zustand-tui
 ```
 
+When started, it runs on port `8080`:
+- 🖥️ **Interactive Terminal UI**: Full 3-pane navigation, diffs, and snapshots for developer inspection.
+- 🔄 **WebSocket Telemetry** (`ws://localhost:8080`): Receives real-time store mutations from client apps.
+- 🤖 **MCP SSE Endpoint** (`http://localhost:8080/sse`): Direct connection for AI agents (Cursor, Claude Desktop, Gemini CLI).
+- 🌐 **REST Snapshot API** (`http://localhost:8080/api/stores` & `/health`): Instant JSON inspection via `curl` or scripts.
+
 Custom port:
 ```bash
 npx zustand-tui --port 8080
 ```
+
+---
+
+## 🤖 Model Context Protocol (MCP) Configuration
+
+AI coding agents can connect to your Zustand stores in two ways:
+
+### Option 1: Direct SSE URL (Recommended with `npx zustand-tui`)
+
+When you run `npx zustand-tui`, the MCP server is already live on `/sse`. In your agent configuration:
+
+```json
+{
+  "mcpServers": {
+    "zustand": {
+      "url": "http://localhost:8080/sse"
+    }
+  }
+}
+```
+
+### Option 2: stdio Binary (`npx zustand-mcp`)
+
+If your agent runs local CLI commands over `stdio`:
+
+```json
+{
+  "mcpServers": {
+    "zustand": {
+      "command": "npx",
+      "args": ["zustand-mcp", "--port", "8080"]
+    }
+  }
+}
+```
+
+> **Smart Bridging**: If `npx zustand-tui` is already running on port `8080`, `zustand-mcp` automatically detects it and bridges stdio traffic straight into the running TUI instance. If `zustand-tui` is not running, it starts in standalone headless mode.
+
+### Available MCP Tools & Resources
+
+| Tool | Description |
+| --- | --- |
+| `list_stores` | Lists connected sessions (active & offline) and registered stores. |
+| `get_store_state` | Returns the state snapshot; supports dot-notation path selectors (e.g. `user.profile`, `items[0]`). |
+| `get_action_history` | Chronological action timeline (metadata-first; opt-in state hydration via `includeState: true`). |
+| `get_state_diff` | Computes machine-readable JSON diffs (`added`, `removed`, `updated`) between actions. |
+
+**Resources:**
+- `zustand://stores/{storeName}`: Live state snapshot for the active session.
+- `zustand://sessions`: Connected sessions summary.
 
 ---
 

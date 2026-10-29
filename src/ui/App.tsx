@@ -220,7 +220,7 @@ export const App: React.FC<AppProps> = ({
           Zustand TUI
         </Text>
         <Box>
-          <Text color="gray">Listening on port {port} | Connected clients: </Text>
+          <Text color="gray">Listening on port {port} (WS & MCP) | Connected clients: </Text>
           <Text bold color={activeCount > 0 ? 'green' : 'yellow'}>
             {activeCount}
           </Text>
