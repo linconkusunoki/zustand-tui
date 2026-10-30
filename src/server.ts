@@ -52,6 +52,7 @@ export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
   const maxActions = options.maxActionsPerStore ?? 100;
   const emitter = new EventEmitter() as TuiServer;
   let httpServer: http.Server | null = null;
+  const httpSockets = new Set<import('node:net').Socket>();
   let wss: WebSocketServer | null = null;
   const clients = new Set<WebSocket>();
   let customHttpHandler: HttpRequestHandler | undefined = options.httpHandler;
@@ -149,6 +150,13 @@ export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
         });
 
         emitter.httpServer = httpServer;
+
+        httpServer.on('connection', (socket) => {
+          httpSockets.add(socket);
+          socket.on('close', () => {
+            httpSockets.delete(socket);
+          });
+        });
 
         httpServer.on('error', (err) => {
           emitter.emit('error', err);
@@ -312,7 +320,15 @@ export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
         wss = null;
       }
 
+      for (const socket of httpSockets) {
+        socket.destroy();
+      }
+      httpSockets.clear();
+
       if (httpServer) {
+        if (typeof (httpServer as any).closeAllConnections === 'function') {
+          (httpServer as any).closeAllConnections();
+        }
         httpServer.close((err) => {
           httpServer = null;
           emitter.httpServer = undefined;

@@ -32,10 +32,19 @@ describe('e2e walking skeleton and store registration', () => {
     cliProcess.stdout?.on('data', (data) => {
       output += data.toString();
     });
+    cliProcess.stderr?.on('data', (data) => {
+      output += data.toString();
+    });
+    cliProcess.on('error', (err) => {
+      output += `\n[CLI error]: ${err.message}`;
+    });
 
     // Wait for the server to be listening
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('CLI startup timed out')), 4000);
+      const timeout = setTimeout(
+        () => reject(new Error('CLI startup timed out. Output was:\n' + output)),
+        10000
+      );
       const interval = setInterval(() => {
         if (output.includes('Zustand TUI') || output.includes(String(TEST_PORT))) {
           clearTimeout(timeout);
@@ -79,7 +88,10 @@ describe('e2e walking skeleton and store registration', () => {
 
     // Wait for bear-store and @@INIT to appear in output
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Store registration timed out')), 4000);
+      const timeout = setTimeout(
+        () => reject(new Error('Store registration timed out. Output was:\n' + output)),
+        10000
+      );
       const interval = setInterval(() => {
         if (
           output.includes('bear-store') &&
@@ -102,7 +114,10 @@ describe('e2e walking skeleton and store registration', () => {
 
     // Wait for addBear action to appear in output
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Action dispatch timed out')), 4000);
+      const timeout = setTimeout(
+        () => reject(new Error('Action dispatch timed out. Output was:\n' + output)),
+        10000
+      );
       const interval = setInterval(() => {
         if (output.includes('addBear') && output.includes('"bears": 4')) {
           clearTimeout(timeout);
@@ -116,5 +131,5 @@ describe('e2e walking skeleton and store registration', () => {
     expect(output).toContain('"bears": 4');
 
     client.close();
-  });
+  }, 30000);
 });

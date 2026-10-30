@@ -9,6 +9,7 @@ import { createTuiServer } from './server.js';
 describe('Zustand MCP Server', () => {
   let mcpInstance: ZustandMcpServerInstance | null = null;
   let client: Client | null = null;
+  let sseClient: Client | null = null;
   const TEST_PORT = 9123;
 
   function getToolResultText(res: any): string {
@@ -31,6 +32,14 @@ describe('Zustand MCP Server', () => {
   });
 
   afterEach(async () => {
+    if (sseClient) {
+      try {
+        await sseClient.close();
+      } catch {
+        // ignore error on close
+      }
+      sseClient = null;
+    }
     if (client) {
       await client.close();
       client = null;
@@ -307,21 +316,21 @@ describe('Zustand MCP Server', () => {
   });
 
   it('serves HTTP health check and REST store snapshots', async () => {
-    const healthRes = await fetch(`http://localhost:${TEST_PORT}/health`);
+    const healthRes = await fetch(`http://127.0.0.1:${TEST_PORT}/health`);
     expect(healthRes.status).toBe(200);
     const healthJson = (await healthRes.json()) as any;
     expect(healthJson.status).toBe('ok');
     expect(healthJson.mcpEndpoint).toBe(`http://localhost:${TEST_PORT}/sse`);
 
-    const storesRes = await fetch(`http://localhost:${TEST_PORT}/api/stores`);
+    const storesRes = await fetch(`http://127.0.0.1:${TEST_PORT}/api/stores`);
     expect(storesRes.status).toBe(200);
     const storesJson = await storesRes.json();
     expect(Array.isArray(storesJson)).toBe(true);
   });
 
   it('connects an MCP client directly over SSE (single-command support)', async () => {
-    const sseTransport = new SSEClientTransport(new URL(`http://localhost:${TEST_PORT}/sse`));
-    const sseClient = new Client(
+    const sseTransport = new SSEClientTransport(new URL(`http://127.0.0.1:${TEST_PORT}/sse`));
+    sseClient = new Client(
       { name: 'sse-test-agent', version: '1.0.0' },
       { capabilities: {} }
     );
@@ -337,5 +346,6 @@ describe('Zustand MCP Server', () => {
     expect(getToolResultText(res)).toContain('No active or offline sessions recorded');
 
     await sseClient.close();
+    sseClient = null;
   });
 });
