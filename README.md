@@ -11,6 +11,7 @@
 [![Zustand](https://img.shields.io/badge/Zustand-v4%20%7C%20v5-orange)](https://zustand.docs.pmnd.rs/)
 
 [Features](#-features) •
+[Installation](#-installation) •
 [Quickstart](#-quickstart) •
 [Drop-in Snippet](#-drop-in-client-snippet) •
 [Keyboard Navigation](#-keyboard-navigation) •
@@ -60,11 +61,83 @@
 
 ---
 
-## 🚀 Quickstart: Single Command for Humans & AI Agents
+## 📦 Installation
 
-Running `npx zustand-tui` launches **both** the interactive Terminal UI and the embedded MCP Server simultaneously from a single command:
+Choose the installation method that fits your workflow:
+
+### 1. Standalone Native Binary (Zero Dependencies — *lazygit* style)
+
+Run `zustand-tui` and `zustand-mcp` anywhere as system commands without requiring Node.js or npm:
+
+#### Quick Install (Linux & macOS):
 
 ```bash
+# Linux (x64)
+curl -fsSL https://github.com/linconkusunoki/zustand-tui/releases/latest/download/zustand-tui-linux-x64 -o ~/.local/bin/zustand-tui && chmod +x ~/.local/bin/zustand-tui
+curl -fsSL https://github.com/linconkusunoki/zustand-tui/releases/latest/download/zustand-mcp-linux-x64 -o ~/.local/bin/zustand-mcp && chmod +x ~/.local/bin/zustand-mcp
+
+# macOS (Apple Silicon M1/M2/M3/M4)
+curl -fsSL https://github.com/linconkusunoki/zustand-tui/releases/latest/download/zustand-tui-darwin-arm64 -o /usr/local/bin/zustand-tui && chmod +x /usr/local/bin/zustand-tui
+curl -fsSL https://github.com/linconkusunoki/zustand-tui/releases/latest/download/zustand-mcp-darwin-arm64 -o /usr/local/bin/zustand-mcp && chmod +x /usr/local/bin/zustand-mcp
+
+# macOS (Intel)
+curl -fsSL https://github.com/linconkusunoki/zustand-tui/releases/latest/download/zustand-tui-darwin-x64 -o /usr/local/bin/zustand-tui && chmod +x /usr/local/bin/zustand-tui
+curl -fsSL https://github.com/linconkusunoki/zustand-tui/releases/latest/download/zustand-mcp-darwin-x64 -o /usr/local/bin/zustand-mcp && chmod +x /usr/local/bin/zustand-mcp
+```
+
+Pre-compiled binaries for **Linux (x64/arm64)**, **macOS (Apple Silicon/Intel)**, and **Windows** are also available directly on [GitHub Releases](https://github.com/linconkusunoki/zustand-tui/releases/latest).
+
+#### Build from Source with Bun:
+
+```bash
+git clone https://github.com/linconkusunoki/zustand-tui.git
+cd zustand-tui
+bun install
+bun run install:bin  # Compiles and installs directly to ~/.local/bin/
+```
+
+---
+
+### 2. Global Installation via Package Manager
+
+If you already have Node.js installed:
+
+```bash
+# npm
+npm install -g zustand-tui
+
+# pnpm
+pnpm add -g zustand-tui
+
+# bun
+bun install -g zustand-tui
+```
+
+---
+
+### 3. Local Project / Monorepo Linking
+
+To link a local clone on your machine:
+
+```bash
+cd zustand-tui
+npm install && npm run build
+npm link
+
+# Commands are now globally available:
+zustand-tui
+zustand-mcp
+```
+
+---
+
+## 🚀 Quickstart: Single Command for Humans & AI Agents
+
+Running `zustand-tui` (or `npx zustand-tui`) launches **both** the interactive Terminal UI and the embedded MCP Server simultaneously from a single command:
+
+```bash
+zustand-tui
+# or without installing:
 npx zustand-tui
 ```
 
@@ -76,22 +149,8 @@ When started, it runs on port `8080`:
 
 Custom port:
 ```bash
-npx zustand-tui --port 8080
+zustand-tui --port 8080
 ```
-
-### ⚡ Standalone Native Binary (lazygit style)
-
-You can also run `zustand-tui` as a single, compiled native binary with **zero dependencies** (no Node.js or npm required):
-
-```bash
-# Build and install standalone binary directly to ~/.local/bin/
-bun run install:bin
-
-# Run globally from any directory
-zustand-tui
-```
-
-Pre-compiled standalone executables for **Linux (x64/arm64)**, **macOS (Apple Silicon/Intel)**, and **Windows** are automatically generated and attached to [GitHub Releases](https://github.com/linconkusunoki/zustand-tui/releases).
 
 ---
 
