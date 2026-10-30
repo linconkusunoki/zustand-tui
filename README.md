@@ -79,6 +79,20 @@ Custom port:
 npx zustand-tui --port 8080
 ```
 
+### ⚡ Standalone Native Binary (lazygit style)
+
+You can also run `zustand-tui` as a single, compiled native binary with **zero dependencies** (no Node.js or npm required):
+
+```bash
+# Build and install standalone binary directly to ~/.local/bin/
+bun run install:bin
+
+# Run globally from any directory
+zustand-tui
+```
+
+Pre-compiled standalone executables for **Linux (x64/arm64)**, **macOS (Apple Silicon/Intel)**, and **Windows** are automatically generated and attached to [GitHub Releases](https://github.com/linconkusunoki/zustand-tui/releases).
+
 ---
 
 ## 🤖 Model Context Protocol (MCP) Configuration

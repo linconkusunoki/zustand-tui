@@ -19,7 +19,9 @@
     "demo": "node demo-dispatch.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:bin": "bun build --compile --minify ./src/cli.tsx --outfile ./bin/zustand-tui && bun build --compile --minify ./src/mcp-cli.ts --outfile ./bin/zustand-mcp",
+    "install:bin": "bun run build:bin && mkdir -p ~/.local/bin && cp ./bin/zustand-tui ~/.local/bin/zustand-tui && cp ./bin/zustand-mcp ~/.local/bin/zustand-mcp"
   },
   "keywords": [
     "zustand",
@@ -50,6 +52,7 @@
     "@types/react": "^18.3.18",
     "@types/ws": "^8.5.14",
     "ink-testing-library": "^4.0.0",
+    "react-devtools-core": "^4.28.5",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",
     "vitest": "^3.0.7"

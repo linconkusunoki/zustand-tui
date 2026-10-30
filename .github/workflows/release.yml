@@ -1,0 +1,55 @@
+name: Release Standalone Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    name: Build & Release Standalone Binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Dependencies
+        run: bun install
+
+      - name: Compile Standalone Binaries
+        run: |
+          mkdir -p release-binaries
+          
+          # Linux x64
+          bun build --compile --target=bun-linux-x64 --minify ./src/cli.tsx --outfile release-binaries/zustand-tui-linux-x64
+          bun build --compile --target=bun-linux-x64 --minify ./src/mcp-cli.ts --outfile release-binaries/zustand-mcp-linux-x64
+
+          # Linux ARM64
+          bun build --compile --target=bun-linux-arm64 --minify ./src/cli.tsx --outfile release-binaries/zustand-tui-linux-arm64
+          bun build --compile --target=bun-linux-arm64 --minify ./src/mcp-cli.ts --outfile release-binaries/zustand-mcp-linux-arm64
+
+          # macOS Apple Silicon (ARM64)
+          bun build --compile --target=bun-darwin-arm64 --minify ./src/cli.tsx --outfile release-binaries/zustand-tui-darwin-arm64
+          bun build --compile --target=bun-darwin-arm64 --minify ./src/mcp-cli.ts --outfile release-binaries/zustand-mcp-darwin-arm64
+
+          # macOS Intel (x64)
+          bun build --compile --target=bun-darwin-x64 --minify ./src/cli.tsx --outfile release-binaries/zustand-tui-darwin-x64
+          bun build --compile --target=bun-darwin-x64 --minify ./src/mcp-cli.ts --outfile release-binaries/zustand-mcp-darwin-x64
+
+          # Windows x64
+          bun build --compile --target=bun-windows-x64 --minify ./src/cli.tsx --outfile release-binaries/zustand-tui-windows-x64.exe
+          bun build --compile --target=bun-windows-x64 --minify ./src/mcp-cli.ts --outfile release-binaries/zustand-mcp-windows-x64.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-binaries/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
