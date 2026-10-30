@@ -34,4 +34,13 @@ jobs:
         run: npm run build
 
       - name: Run Tests
-        run: npm test
+        run: |
+          npx vitest run --reporter=verbose 2>&1 | tee test-results.log
+
+      - name: Publish Test Summary
+        if: always()
+        run: |
+          echo "### Test Results (Node ${{ matrix.node-version }})" >> $GITHUB_STEP_SUMMARY
+          echo '```text' >> $GITHUB_STEP_SUMMARY
+          tail -n 100 test-results.log >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
