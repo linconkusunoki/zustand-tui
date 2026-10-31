@@ -25,8 +25,8 @@ const exitAltScreen = () => {
 };
 
 async function main() {
-  enterAltScreen();
   await server.start();
+  enterAltScreen();
   const { unmount, waitUntilExit } = render(<App port={port} server={server} />);
 
   const cleanup = async () => {
@@ -45,8 +45,11 @@ async function main() {
 }
 
 main().catch(async (err) => {
-  console.error('Failed to start Zustand TUI:', err);
-  await mcp.stop();
   exitAltScreen();
+  console.error('\n❌ Failed to start Zustand TUI:', err?.message || err);
+  if (err?.code === 'EADDRINUSE') {
+    console.error(`Port ${port} is already in use by another process. Try specifying a different port with --port <number>.\n`);
+  }
+  await mcp.stop().catch(() => {});
   process.exit(1);
 });

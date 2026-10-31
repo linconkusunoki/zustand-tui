@@ -34,8 +34,8 @@ export const App: React.FC<AppProps> = ({
   const isFullscreen = fullscreen ?? Boolean(stdout?.isTTY);
 
   const [dimensions, setDimensions] = useState(() => ({
-    columns: stdout?.columns ?? 80,
-    rows: stdout?.rows ?? 24,
+    columns: stdout?.columns && stdout.columns > 40 ? stdout.columns : 80,
+    rows: stdout?.rows && stdout.rows > 12 ? stdout.rows : 24,
   }));
 
   useEffect(() => {
@@ -43,8 +43,8 @@ export const App: React.FC<AppProps> = ({
 
     const handleResize = () => {
       setDimensions({
-        columns: stdout.columns ?? 80,
-        rows: stdout.rows ?? 24,
+        columns: stdout.columns && stdout.columns > 40 ? stdout.columns : 80,
+        rows: stdout.rows && stdout.rows > 12 ? stdout.rows : 24,
       });
     };
 
@@ -211,7 +211,7 @@ export const App: React.FC<AppProps> = ({
       borderColor="cyan"
       paddingX={1}
       width={isFullscreen ? dimensions.columns : undefined}
-      height={isFullscreen ? dimensions.rows : undefined}
+      height={isFullscreen ? Math.max(dimensions.rows, 16) : undefined}
       justifyContent="space-between"
     >
       {/* Header */}
