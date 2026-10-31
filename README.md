@@ -303,6 +303,9 @@ As actions are dispatched in your app, they immediately stream into the TUI in r
 | `Shift + Tab` | Cycle focus backward (`State` ➔ `Actions` ➔ `Stores`) |
 | `↑` / `↓` or `k` / `j` | Navigate items in the active pane / scroll JSON state |
 | `d` | Toggle right pane between `[Snapshot]` and `[Diff]` view |
+| `a` | Jump directly to `★ [All Stores]` global event sequence |
+| `s` | Open Sessions History Manager (view active & archived sessions) |
+| `c` | Clear/purge all archived sessions (inside Sessions Manager) |
 | `q` or `Esc` | Quit TUI cleanly and restore terminal |
 
 ---

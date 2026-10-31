@@ -21,7 +21,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "build:bin": "bun build --compile --minify ./src/cli.tsx --outfile ./bin/zustand-tui && bun build --compile --minify ./src/mcp-cli.ts --outfile ./bin/zustand-mcp",
-    "install:bin": "bun run build:bin && mkdir -p ~/.local/bin && cp ./bin/zustand-tui ~/.local/bin/zustand-tui && cp ./bin/zustand-mcp ~/.local/bin/zustand-mcp"
+    "install:bin": "bun run build:bin && mkdir -p ~/.local/bin && install -m 755 ./bin/zustand-tui ~/.local/bin/zustand-tui && install -m 755 ./bin/zustand-mcp ~/.local/bin/zustand-mcp"
   },
   "keywords": [
     "zustand",

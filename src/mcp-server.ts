@@ -110,13 +110,13 @@ export function buildMcpServer(tuiServer: TuiServer): Server {
       {
         name: 'get_action_history',
         description:
-          'Get the chronological action timeline for a store with lightweight metadata by default, and opt-in state hydration.',
+          'Get the chronological action timeline for a store (or "all" for all stores in sequence) with lightweight metadata by default, and opt-in state hydration.',
         inputSchema: {
           type: 'object',
           properties: {
             storeName: {
               type: 'string',
-              description: 'Name of the store.',
+              description: 'Name of the store, or "all" to retrieve all events across all stores in sequence.',
             },
             sessionId: {
               type: 'string',
@@ -134,6 +134,14 @@ export function buildMcpServer(tuiServer: TuiServer): Server {
             },
           },
           required: ['storeName'],
+        },
+      },
+      {
+        name: 'clear_archived_sessions',
+        description: 'Purges disconnected / offline sessions from memory.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
         },
       },
       {
@@ -277,6 +285,27 @@ export function buildMcpServer(tuiServer: TuiServer): Server {
       };
     }
 
+    if (name === 'clear_archived_sessions') {
+      const beforeCount = tuiServer.getArchivedSessions().length;
+      tuiServer.clearArchivedSessions();
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: true,
+                clearedSessionsCount: beforeCount,
+                message: `Purged ${beforeCount} archived session(s) from memory.`,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+
     if (name === 'get_action_history') {
       const storeName = String(args?.storeName ?? '');
       const reqSessionId = args?.sessionId ? String(args.sessionId) : undefined;
@@ -293,6 +322,41 @@ export function buildMcpServer(tuiServer: TuiServer): Server {
               text: `No sessions found. Ensure the application is connected to ws://localhost:${tuiServer.port}.`,
             },
           ],
+        };
+      }
+
+      if (storeName.toLowerCase() === 'all' || storeName === '*' || storeName === '__ALL__') {
+        const allActions = tuiServer.getAllActions(session.id);
+        const slicedActions = allActions.slice(-limit);
+        const actions = slicedActions.map((rec) => {
+          if (includeState) {
+            return {
+              id: rec.id,
+              action: rec.action,
+              store: rec.store,
+              timestamp: rec.timestamp,
+              state: rec.state,
+            };
+          }
+          return {
+            id: rec.id,
+            action: rec.action,
+            store: rec.store,
+            timestamp: rec.timestamp,
+          };
+        });
+
+        const result = {
+          store: 'all',
+          sessionId: session.id,
+          sessionStatus: session.status,
+          totalRecordedActions: allActions.length,
+          returnedActionsCount: actions.length,
+          actions,
+        };
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
         };
       }
 

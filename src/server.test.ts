@@ -234,4 +234,96 @@ describe('TuiServer', () => {
 
     client.close();
   });
+
+  it('aggregates all events across all stores in sequence and manages archived sessions', async () => {
+    server = createTuiServer({ port: TEST_PORT });
+    await server.start();
+
+    const client1 = new WebSocket(`ws://localhost:${TEST_PORT}`);
+    await new Promise<void>((resolve) => client1.on('open', () => resolve()));
+
+    // Store A initialized on tab-1
+    client1.send(
+      JSON.stringify({
+        type: 'INIT_STORE',
+        sessionId: 'tab-1',
+        store: 'cart',
+        state: { items: [] },
+      })
+    );
+
+    // Store B initialized on tab-1
+    client1.send(
+      JSON.stringify({
+        type: 'INIT_STORE',
+        sessionId: 'tab-1',
+        store: 'auth',
+        state: { user: 'Alice' },
+      })
+    );
+
+    // Dispatches across both stores
+    client1.send(
+      JSON.stringify({
+        type: 'ACTION',
+        sessionId: 'tab-1',
+        store: 'cart',
+        action: 'addItem',
+        state: { items: ['apple'] },
+        timestamp: 1000,
+      })
+    );
+
+    client1.send(
+      JSON.stringify({
+        type: 'ACTION',
+        sessionId: 'tab-1',
+        store: 'auth',
+        action: 'logout',
+        state: { user: null },
+        timestamp: 2000,
+      })
+    );
+
+    await new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        if ((server?.getAllActions().length ?? 0) >= 4) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 10);
+    });
+
+    const allActions = server.getAllActions('tab-1');
+    expect(allActions.length).toBe(4);
+    expect(allActions.map((a) => `${a.store}:${a.action}`)).toEqual([
+      'cart:@@INIT',
+      'auth:@@INIT',
+      'cart:addItem',
+      'auth:logout',
+    ]);
+
+    // Active sessions
+    expect(server.getActiveSessions().length).toBe(1);
+    expect(server.getArchivedSessions().length).toBe(0);
+
+    // Close client1 -> becomes archived/offline
+    client1.close();
+    await new Promise<void>((resolve) => {
+      const interval = setInterval(() => {
+        if (server?.getArchivedSessions().length === 1) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 10);
+    });
+
+    expect(server.getActiveSessions().length).toBe(0);
+    expect(server.getArchivedSessions().length).toBe(1);
+
+    // Clear archived sessions
+    server.clearArchivedSessions();
+    expect(server.getArchivedSessions().length).toBe(0);
+    expect(server.getSessions().length).toBe(0);
+  });
 });

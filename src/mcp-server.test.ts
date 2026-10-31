@@ -345,6 +345,7 @@ describe('Zustand MCP Server', () => {
     });
     expect(getToolResultText(res)).toContain('No active or offline sessions recorded');
 
+    sseTransport.onerror = () => {};
     await sseClient.close();
     sseClient = null;
   });

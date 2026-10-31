@@ -6,23 +6,36 @@ export interface StoreListProps {
   sessions: SessionInfo[];
   selectedGlobalIndex: number;
   isFocused?: boolean;
+  totalAllActionsCount?: number;
+  showAllStoresOption?: boolean;
+  archivedSessionsCount?: number;
 }
 
 export const StoreList: React.FC<StoreListProps> = ({
   sessions,
   selectedGlobalIndex,
   isFocused = false,
+  totalAllActionsCount = 0,
+  showAllStoresOption = true,
+  archivedSessionsCount = 0,
 }) => {
   let currentGlobalIndex = 0;
   const totalStores = sessions.reduce((acc, s) => acc + s.stores.length, 0);
+
+  const renderAllStoresItem = showAllStoresOption && totalStores > 0;
+  const isAllStoresSelected = renderAllStoresItem && selectedGlobalIndex === 0;
+
+  if (renderAllStoresItem) {
+    currentGlobalIndex = 1;
+  }
 
   return (
     <Box
       flexDirection="column"
       borderStyle="single"
       borderColor={isFocused ? 'cyan' : 'gray'}
-      width="25%"
-      minWidth={15}
+      width="30%"
+      minWidth={20}
       paddingX={1}
     >
       <Box marginBottom={1}>
@@ -30,6 +43,18 @@ export const StoreList: React.FC<StoreListProps> = ({
           Stores ({totalStores})
         </Text>
       </Box>
+
+      {renderAllStoresItem && (
+        <Box marginBottom={1}>
+          <Text
+            color={isAllStoresSelected ? 'cyan' : 'magenta'}
+            bold={isAllStoresSelected}
+          >
+            {isAllStoresSelected ? ' > ' : '   '}
+            ★ [All Stores] ({totalAllActionsCount})
+          </Text>
+        </Box>
+      )}
 
       {sessions.length === 0 || totalStores === 0 ? (
         <Text color="gray">(No stores registered)</Text>
@@ -39,9 +64,9 @@ export const StoreList: React.FC<StoreListProps> = ({
           return (
             <Box key={session.id} flexDirection="column" marginBottom={1}>
               {/* Session header */}
-              <Box justifyContent="space-between">
+              <Box>
                 <Text bold color={isOffline ? 'gray' : 'magenta'}>
-                  {session.id}
+                  {session.id}{' '}
                 </Text>
                 <Text color={isOffline ? 'gray' : 'green'}>
                   {isOffline ? '[Offline]' : '(active)'}
@@ -70,6 +95,14 @@ export const StoreList: React.FC<StoreListProps> = ({
             </Box>
           );
         })
+      )}
+
+      {archivedSessionsCount > 0 && (
+        <Box marginTop={1}>
+          <Text color="gray">
+            📁 {archivedSessionsCount} archived | [s]
+          </Text>
+        </Box>
       )}
     </Box>
   );

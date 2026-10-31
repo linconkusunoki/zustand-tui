@@ -1,35 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput, useApp, useStdin, useStdout } from 'ink';
-import type { TuiServer, SessionInfo, StoreInfo } from '../server.js';
+import { Box, Text, useInput, useApp, useStdout, useStdin } from 'ink';
+import type { TuiServer, StoreInfo, SessionInfo, ActionRecord } from '../server.js';
 import { StoreList } from './StoreList.js';
 import { ActionList } from './ActionList.js';
 import { StateViewer } from './StateViewer.js';
 
 export interface AppProps {
-  port: number;
-  clientCount?: number;
+  port?: number;
   server?: TuiServer;
-  sessions?: SessionInfo[];
+  clientCount?: number;
   stores?: StoreInfo[];
+  sessions?: SessionInfo[];
   selectedStoreIndex?: number;
-  selectedActionIndex?: number;
   viewMode?: 'snapshot' | 'diff';
   fullscreen?: boolean;
 }
 
 export const App: React.FC<AppProps> = ({
-  port,
-  clientCount,
+  port = 8080,
   server,
-  sessions: propSessions,
+  clientCount,
   stores: propStores,
+  sessions: propSessions,
   selectedStoreIndex: propSelectedStoreIndex,
   viewMode: propViewMode,
   fullscreen,
 }) => {
   const { exit } = useApp();
-  const { isRawModeSupported } = useStdin();
   const { stdout } = useStdout();
+  const { isRawModeSupported } = useStdin();
 
   const isFullscreen = fullscreen ?? Boolean(stdout?.isTTY);
 
@@ -74,14 +73,19 @@ export const App: React.FC<AppProps> = ({
   });
 
   const [activePane, setActivePane] = useState<'stores' | 'actions' | 'state'>('stores');
-  const [selectedStoreIndex, setSelectedStoreIndex] = useState<number>(() => {
-    return propSelectedStoreIndex ?? 0;
+  // 0 = All Stores, 1..N = individual stores
+  const [selectedGlobalStoreIndex, setSelectedGlobalStoreIndex] = useState<number>(() => {
+    return propSelectedStoreIndex !== undefined ? propSelectedStoreIndex + 1 : 0;
   });
   const [selectedActionIndex, setSelectedActionIndex] = useState<number>(-1);
   const [stateScrollOffset, setStateScrollOffset] = useState<number>(0);
   const [viewMode, setViewMode] = useState<'snapshot' | 'diff'>(() => {
     return propViewMode ?? 'snapshot';
   });
+
+  // Sessions Switcher Modal state
+  const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
+  const [modalSessionIndex, setModalSessionIndex] = useState(0);
 
   useEffect(() => {
     if (propViewMode !== undefined) {
@@ -124,11 +128,43 @@ export const App: React.FC<AppProps> = ({
     };
   }, [server]);
 
+  const activeSessions = sessions.filter((s) => s.status === 'active');
+  const archivedSessions = sessions.filter((s) => s.status === 'offline');
+
+  // Stores flattened from sessions in display order (active first)
   const allStores = sessions.flatMap((s) => s.stores);
+  const totalStoreCount = allStores.length;
+  // Index 0 is [All Stores] if stores exist
+  const totalSelectableStores = totalStoreCount > 0 ? totalStoreCount + 1 : 0;
+
   const clampedStoreIndex =
-    allStores.length > 0 ? Math.min(selectedStoreIndex, allStores.length - 1) : 0;
-  const currentStore = allStores[clampedStoreIndex];
-  const actions = currentStore?.actions ?? [];
+    totalSelectableStores > 0
+      ? Math.min(Math.max(0, selectedGlobalStoreIndex), totalSelectableStores - 1)
+      : 0;
+
+  const isAllStoresMode = totalStoreCount > 0 && clampedStoreIndex === 0;
+  const currentStore = !isAllStoresMode && totalStoreCount > 0
+    ? allStores[clampedStoreIndex - 1]
+    : undefined;
+
+  // Retrieve global actions or current store actions
+  const serverGlobal = server?.getAllActions() ?? [];
+  const globalActions: ActionRecord[] =
+    serverGlobal.length > 0
+      ? serverGlobal
+      : allStores
+          .flatMap((s) =>
+            s.actions.map((a) => ({
+              ...a,
+              store: a.store || s.name,
+              sessionId: a.sessionId || s.sessionId,
+            }))
+          )
+          .sort((a, b) => a.timestamp - b.timestamp);
+
+  const actions: ActionRecord[] = isAllStoresMode
+    ? globalActions
+    : currentStore?.actions ?? [];
 
   const effectiveActionIndex =
     selectedActionIndex >= 0 && selectedActionIndex < actions.length
@@ -137,8 +173,48 @@ export const App: React.FC<AppProps> = ({
 
   useInput(
     (input, key) => {
+      // 1. Session Modal Navigation
+      if (isSessionModalOpen) {
+        if (key.escape || input === 's') {
+          setIsSessionModalOpen(false);
+          return;
+        }
+
+        if (input === 'c' && server) {
+          server.clearArchivedSessions();
+          setModalSessionIndex(0);
+          return;
+        }
+
+        if (sessions.length > 0) {
+          if (key.upArrow || input === 'k') {
+            setModalSessionIndex((prev) => (prev > 0 ? prev - 1 : sessions.length - 1));
+          } else if (key.downArrow || input === 'j') {
+            setModalSessionIndex((prev) => (prev < sessions.length - 1 ? prev + 1 : 0));
+          } else if (key.return) {
+            setIsSessionModalOpen(false);
+          }
+        }
+        return;
+      }
+
+      // 2. Normal View Navigation
       if (input === 'q' || key.escape) {
         exit();
+        return;
+      }
+
+      if (input === 's') {
+        setIsSessionModalOpen(true);
+        setModalSessionIndex(0);
+        return;
+      }
+
+      if (input === 'a') {
+        // Jump directly to [All Stores]
+        setSelectedGlobalStoreIndex(0);
+        setSelectedActionIndex(-1);
+        setStateScrollOffset(0);
         return;
       }
 
@@ -161,14 +237,18 @@ export const App: React.FC<AppProps> = ({
       }
 
       if (activePane === 'stores') {
-        if (allStores.length === 0) return;
+        if (totalSelectableStores === 0) return;
 
         if (key.upArrow || input === 'k') {
-          setSelectedStoreIndex((prev) => (prev > 0 ? prev - 1 : allStores.length - 1));
+          setSelectedGlobalStoreIndex((prev) =>
+            prev > 0 ? prev - 1 : totalSelectableStores - 1
+          );
           setSelectedActionIndex(-1);
           setStateScrollOffset(0);
         } else if (key.downArrow || input === 'j') {
-          setSelectedStoreIndex((prev) => (prev < allStores.length - 1 ? prev + 1 : 0));
+          setSelectedGlobalStoreIndex((prev) =>
+            prev < totalSelectableStores - 1 ? prev + 1 : 0
+          );
           setSelectedActionIndex(-1);
           setStateScrollOffset(0);
         }
@@ -201,8 +281,28 @@ export const App: React.FC<AppProps> = ({
 
   const activeCount = server ? serverClientCount : (clientCount ?? 0);
   const currentAction = actions[effectiveActionIndex];
-  const previousAction =
-    effectiveActionIndex > 0 ? actions[effectiveActionIndex - 1] : undefined;
+
+  // In [All Stores] mode, find previous action for the SAME store
+  let previousAction: ActionRecord | undefined;
+  if (isAllStoresMode) {
+    if (currentAction && effectiveActionIndex > 0) {
+      previousAction = actions
+        .slice(0, effectiveActionIndex)
+        .reverse()
+        .find((a) => a.store === currentAction.store);
+    }
+  } else {
+    previousAction =
+      effectiveActionIndex > 0 ? actions[effectiveActionIndex - 1] : undefined;
+  }
+
+  const effectiveStoreName = isAllStoresMode
+    ? currentAction?.store || (allStores[0]?.name ? `${allStores[0].name}` : 'All Stores')
+    : currentStore?.name;
+
+  const effectiveFallbackState = isAllStoresMode
+    ? currentAction?.state ?? allStores[0]?.currentState
+    : currentStore?.currentState;
 
   return (
     <Box
@@ -224,36 +324,93 @@ export const App: React.FC<AppProps> = ({
           <Text bold color={activeCount > 0 ? 'green' : 'yellow'}>
             {activeCount}
           </Text>
+          {archivedSessions.length > 0 && (
+            <Text color="gray"> ({archivedSessions.length} archived) | [s] Sessions</Text>
+          )}
         </Box>
       </Box>
 
-      {/* 3-Pane Body */}
-      <Box flexDirection="row" flexGrow={1} minHeight={8}>
-        <StoreList
-          sessions={sessions}
-          selectedGlobalIndex={clampedStoreIndex}
-          isFocused={activePane === 'stores'}
-        />
-        <ActionList
-          actions={actions}
-          selectedIndex={effectiveActionIndex}
-          isFocused={activePane === 'actions'}
-        />
-        <StateViewer
-          storeName={currentStore?.name}
-          action={currentAction}
-          previousAction={previousAction}
-          fallbackState={currentStore?.currentState}
-          viewMode={viewMode}
-          isFocused={activePane === 'state'}
-          scrollOffset={stateScrollOffset}
-        />
-      </Box>
+      {/* Sessions Switcher Overlay Modal */}
+      {isSessionModalOpen ? (
+        <Box
+          flexDirection="column"
+          borderStyle="single"
+          borderColor="yellow"
+          flexGrow={1}
+          padding={1}
+          minHeight={8}
+        >
+          <Box justifyContent="space-between" marginBottom={1}>
+            <Text bold color="yellow">
+              ⚡ Sessions Manager ({sessions.length})
+            </Text>
+            <Text color="gray">[s/Esc] Close | [c] Clear Archived</Text>
+          </Box>
+
+          {sessions.length === 0 ? (
+            <Text color="gray">(No sessions registered)</Text>
+          ) : (
+            sessions.map((sess, idx) => {
+              const isSelected = idx === modalSessionIndex;
+              const isOffline = sess.status === 'offline';
+              const actionCount = sess.stores.reduce((sum, s) => sum + s.actions.length, 0);
+              return (
+                <Box key={sess.id} justifyContent="space-between" marginBottom={1}>
+                  <Text
+                    bold={isSelected}
+                    color={isSelected ? 'yellow' : isOffline ? 'gray' : 'green'}
+                  >
+                    {isSelected ? '> ' : '  '}
+                    {sess.id} {isOffline ? '[Archived]' : '[Active]'}
+                  </Text>
+                  <Text color="gray">
+                    {sess.stores.length} store(s), {actionCount} event(s) |{' '}
+                    {new Date(sess.lastSeen).toLocaleTimeString()}
+                  </Text>
+                </Box>
+              );
+            })
+          )}
+
+          <Box marginTop={1}>
+            <Text color="gray">
+              [↑/↓ or j/k] Navigate | [Enter] Close | [c] Clear archived sessions
+            </Text>
+          </Box>
+        </Box>
+      ) : (
+        /* Standard 3-Pane Body */
+        <Box flexDirection="row" flexGrow={1} minHeight={8}>
+          <StoreList
+            sessions={sessions}
+            selectedGlobalIndex={clampedStoreIndex}
+            isFocused={activePane === 'stores'}
+            totalAllActionsCount={globalActions.length}
+            showAllStoresOption={totalStoreCount > 0}
+            archivedSessionsCount={archivedSessions.length}
+          />
+          <ActionList
+            actions={actions}
+            selectedIndex={effectiveActionIndex}
+            isFocused={activePane === 'actions'}
+            isAllStoresMode={isAllStoresMode}
+          />
+          <StateViewer
+            storeName={effectiveStoreName}
+            action={currentAction}
+            previousAction={previousAction}
+            fallbackState={effectiveFallbackState}
+            viewMode={viewMode}
+            isFocused={activePane === 'state'}
+            scrollOffset={stateScrollOffset}
+          />
+        </Box>
+      )}
 
       {/* Footer */}
       <Box marginTop={1} justifyContent="space-between">
         <Text color="gray">
-          [Tab/Shift+Tab] Focus | [↑/↓ or j/k] Navigate | [d] Diff/Snapshot | [q/Esc] Quit
+          [Tab] Focus | [↑/↓] Navigate | [d] Diff | [s] Sessions | [a] All Stores | [q] Quit
         </Text>
         <Text color="gray">Zustand State Inspector</Text>
       </Box>

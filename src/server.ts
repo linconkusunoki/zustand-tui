@@ -19,6 +19,8 @@ export interface ActionRecord {
   action: string;
   state: unknown;
   timestamp: number;
+  store?: string;
+  sessionId?: string;
 }
 
 export interface StoreInfo {
@@ -42,8 +44,12 @@ export interface TuiServer extends EventEmitter {
   stop(): Promise<void>;
   getClientCount(): number;
   getSessions(): SessionInfo[];
+  getActiveSessions(): SessionInfo[];
+  getArchivedSessions(): SessionInfo[];
+  clearArchivedSessions(): void;
   getStores(sessionId?: string): StoreInfo[];
   getStoreActions(storeName: string, sessionId?: string): ActionRecord[];
+  getAllActions(sessionId?: string): ActionRecord[];
   setHttpHandler(handler: HttpRequestHandler): void;
 }
 
@@ -60,6 +66,7 @@ export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
   const sessions = new Map<string, SessionInfo>();
   const socketSessionMap = new Map<WebSocket, string>();
   const sessionSocketsMap = new Map<string, Set<WebSocket>>();
+  let globalActions: ActionRecord[] = [];
 
   emitter.port = port;
 
@@ -72,7 +79,33 @@ export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
   };
 
   emitter.getSessions = () => {
-    return Array.from(sessions.values());
+    // Sort so active sessions are always first, ordered by most recently seen
+    return Array.from(sessions.values()).sort((a, b) => {
+      if (a.status === 'active' && b.status !== 'active') return -1;
+      if (a.status !== 'active' && b.status === 'active') return 1;
+      return b.lastSeen - a.lastSeen;
+    });
+  };
+
+  emitter.getActiveSessions = () => {
+    return emitter.getSessions().filter((s) => s.status === 'active');
+  };
+
+  emitter.getArchivedSessions = () => {
+    return emitter.getSessions().filter((s) => s.status === 'offline');
+  };
+
+  emitter.clearArchivedSessions = () => {
+    for (const [id, session] of sessions.entries()) {
+      if (session.status === 'offline') {
+        sessions.delete(id);
+      }
+    }
+    globalActions = globalActions.filter((a) => {
+      const sess = sessions.get(a.sessionId || '');
+      return sess && sess.status === 'active';
+    });
+    emitter.emit('sessionsChanged', emitter.getSessions());
   };
 
   emitter.getStores = (sessionId?: string) => {
@@ -80,16 +113,26 @@ export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
       return sessions.get(sessionId)?.stores ?? [];
     }
     const allStores: StoreInfo[] = [];
-    for (const session of sessions.values()) {
+    for (const session of emitter.getSessions()) {
       allStores.push(...session.stores);
     }
     return allStores;
   };
 
   emitter.getStoreActions = (storeName: string, sessionId?: string) => {
+    if (storeName === 'all' || storeName === '*' || storeName === '__ALL__') {
+      return emitter.getAllActions(sessionId);
+    }
     const stores = emitter.getStores(sessionId);
     const store = stores.find((s) => s.name === storeName);
     return store?.actions ?? [];
+  };
+
+  emitter.getAllActions = (sessionId?: string) => {
+    if (sessionId) {
+      return globalActions.filter((a) => a.sessionId === sessionId);
+    }
+    return globalActions;
   };
 
   emitter.start = () => {
@@ -142,6 +185,12 @@ export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
           if (req.url === '/api/stores') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(emitter.getStores(), null, 2));
+            return;
+          }
+
+          if (req.url === '/api/actions') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(emitter.getAllActions(), null, 2));
             return;
           }
 
@@ -210,6 +259,8 @@ export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
                   action: '@@INIT',
                   state: msg.state,
                   timestamp: Date.now(),
+                  store: msg.store,
+                  sessionId,
                 };
 
                 let storeInfo = session.stores.find((s) => s.name === msg.store);
@@ -226,9 +277,14 @@ export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
                   storeInfo.actions = [initAction];
                 }
 
+                globalActions.push(initAction);
+                if (globalActions.length > maxActions * 10) {
+                  globalActions = globalActions.slice(-(maxActions * 10));
+                }
+
                 emitter.emit('storeUpdated', storeInfo);
                 emitter.emit('storesChanged', emitter.getStores());
-                emitter.emit('sessionsChanged', Array.from(sessions.values()));
+                emitter.emit('sessionsChanged', emitter.getSessions());
               } else if (msg.type === 'ACTION' || msg.type === 'SET_STATE') {
                 let storeInfo = session.stores.find((s) => s.name === msg.store);
                 if (!storeInfo) {
@@ -253,6 +309,8 @@ export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
                   action: actionName,
                   state: msg.state,
                   timestamp,
+                  store: msg.store,
+                  sessionId,
                 };
 
                 storeInfo.actions.push(actionRecord);
@@ -261,10 +319,15 @@ export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
                 }
                 storeInfo.currentState = msg.state;
 
+                globalActions.push(actionRecord);
+                if (globalActions.length > maxActions * 10) {
+                  globalActions = globalActions.slice(-(maxActions * 10));
+                }
+
                 emitter.emit('actionDispatched', msg.store, actionRecord, sessionId);
                 emitter.emit('storeUpdated', storeInfo);
                 emitter.emit('storesChanged', emitter.getStores());
-                emitter.emit('sessionsChanged', Array.from(sessions.values()));
+                emitter.emit('sessionsChanged', emitter.getSessions());
               }
             } catch {
               // ignore invalid message payload
@@ -285,7 +348,7 @@ export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
                     session.status = 'offline';
                     session.lastSeen = Date.now();
                     emitter.emit('sessionStatusChanged', session);
-                    emitter.emit('sessionsChanged', Array.from(sessions.values()));
+                    emitter.emit('sessionsChanged', emitter.getSessions());
                   }
                 }
               }
@@ -314,6 +377,7 @@ export function createTuiServer(options: TuiServerOptions = {}): TuiServer {
       sessions.clear();
       socketSessionMap.clear();
       sessionSocketsMap.clear();
+      globalActions = [];
 
       if (wss) {
         wss.close();
