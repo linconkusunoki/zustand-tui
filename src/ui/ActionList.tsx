@@ -18,8 +18,8 @@ export const ActionList: React.FC<ActionListProps> = ({
       flexDirection="column"
       borderStyle="single"
       borderColor={isFocused ? 'cyan' : 'gray'}
-      width="30%"
-      minWidth={24}
+      width="28%"
+      minWidth={16}
       paddingX={1}
     >
       <Box marginBottom={1}>

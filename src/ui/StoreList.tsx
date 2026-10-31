@@ -21,8 +21,8 @@ export const StoreList: React.FC<StoreListProps> = ({
       flexDirection="column"
       borderStyle="single"
       borderColor={isFocused ? 'cyan' : 'gray'}
-      width="28%"
-      minWidth={22}
+      width="25%"
+      minWidth={15}
       paddingX={1}
     >
       <Box marginBottom={1}>

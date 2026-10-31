@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './env-sanitize.js';
 import React from 'react';
 import { render } from 'ink';
 import { createTuiServer } from './server.js';
