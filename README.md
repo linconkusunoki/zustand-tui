@@ -27,18 +27,21 @@
 
 ```text
 ╭─────────────────────────────────────────────────────────────────────────────────────────────╮
-│ Zustand TUI                                   Listening on port 8080 | Connected clients: 1 │
+│ Zustand TUI        Listening on port 8080 (WS & MCP) | Connected clients: 1 (2 archived)    │
 │                                                                                             │
 │ ┌──────────────────────┐┌───────────────────────────┐┌────────────────────────────────────┐ │
-│ │ Stores (2)           ││ Actions (4)               ││ State (cart @ applyCoupon) [Diff]  │ │
+│ │ Stores (2)           ││ All Events (4)            ││ State (cart @ applyCoupon) [Diff]  │ │
 │ │                      ││                           ││                                    │ │
-│ │ tab-desktop (active) ││   @@INIT      3:30:12 PM  ││ + coupon: "SUMMER20"               │ │
-│ │   auth-store         ││   addItem     3:30:14 PM  ││ + discount: 24                     │ │
-│ │ tab-mobile  (active) ││ > applyCoupon 3:30:16 PM  ││ ~ total: 120 => 96                 │ │
-│ │  > cart-store        ││   checkoutOrde3:30:18 PM  ││                                    │ │
+│ │  > ★ [All Stores] (4)││   [auth] @@INIT 3:30:12 PM││ + coupon: "SUMMER20"               │ │
+│ │                      ││   [cart] addItem3:30:14 PM││ + discount: 24                     │ │
+│ │ tab-desktop (active) ││ > [cart] applyCo3:30:16 PM││ ~ total: 120 => 96                 │ │
+│ │    auth-store        ││   [auth] login  3:30:18 PM││                                    │ │
+│ │    cart-store        ││                           ││                                    │ │
+│ │                      ││                           ││                                    │ │
+│ │ 📁 2 archived | [s]  ││                           ││                                    │ │
 │ └──────────────────────┘└───────────────────────────┘└────────────────────────────────────┘ │
 │                                                                                             │
-│ [Tab/Shift+Tab] Focus | [↑/↓ or j/k] Navigate | [d] Diff/Snapshot | [q/Esc] Quit            │
+│ [Tab] Focus | [↑/↓] Navigate | [d] Diff | [s] Sessions | [a] All Stores | [q] Quit          │
 ╰─────────────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -49,11 +52,14 @@
 ## ⚡ Features
 
 - 🖥️ **Full-Screen Terminal Experience**: Runs in your terminal's alternate buffer (like `htop`, `vim`, or `rainfrog`) with dynamic viewport sizing and clean shell restoration upon exit.
+- 🌐 **Global Cross-Store Timeline (`★ [All Stores]`)**: Inspect all actions across every store in unified chronological sequence with `[storeName]` tags and store-aware state diffs. Press **`[a]`** to jump straight to it.
+- ⚡ **Session History Manager & Active Filter (`[s]`)**: Automatically prioritizes active browser tabs at the top of your view upon page reload. Old tabs are neatly archived, inspectable in the session modal (**`[s]`**), and clearable on demand (**`[c]`**).
+- 🤖 **Embedded Model Context Protocol (MCP) Server**: AI coding agents (Claude Desktop, Cursor, Gemini CLI) can directly query store states, inspect action history, and compute state diffs via tools and resources over SSE or stdio.
 - 🎨 **JSON Syntax Highlighting**: Color-codes JSON keys (`cyan`), strings (`green`), numbers (`yellow`), booleans (`magenta`), null (`dimmed`), and structural braces (`gray`).
 - ⚡ **Zero-Dependency Integration**: No heavy browser extensions or bloated npm packages required in your web app. Just a lightweight, copy-pasteable TypeScript snippet.
 - 🔄 **Real-Time 3-Pane Layout**:
-  - **Stores (Left)**: Multi-session grouping (desktop tabs, mobile, SSR) with `[Offline]` state retention on disconnect.
-  - **Action Timeline (Middle)**: Chronological action history with human-readable timestamps.
+  - **Stores (Left)**: Multi-session grouping (desktop tabs, mobile, SSR) with active session priority and archive management.
+  - **Action Timeline (Middle)**: Chronological action history with human-readable timestamps and store badges.
   - **State Inspector (Right)**: Formatted JSON snapshot with a toggleable visual **Diff View** (`+ added`, `- removed`, `~ modified`).
 - 🔍 **Caller Name Extraction**: Automatically infers action names directly from caller stack traces (e.g. `addBear`, `fetchProfile`) for standard `set()` calls, while also supporting explicit names.
 - 🛡️ **Sliding Window Memory Protection**: Bounded action history (defaults to 100 actions per store) prevents memory leaks during high-frequency dispatching.
@@ -215,72 +221,210 @@ export interface TuiOptions {
   sessionId?: string;
 }
 
-export function tui<T>(storeName?: string, options: TuiOptions = {}) {
-  if (process.env.NODE_ENV === 'production') {
-    return (config: any) => config;
+type StoreLike = {
+  getState: () => unknown;
+  setState: (...args: unknown[]) => void;
+  subscribe: (fn: (state: unknown, prev: unknown) => void) => () => void;
+};
+
+// Singleton telemetry client shared across all stores in the browser tab
+class TuiSingletonClient {
+  private ws: WebSocket | null = null;
+  private queue: string[] = [];
+  public sessionId: string;
+  private url: string;
+  private isConnecting = false;
+
+  constructor(url = 'ws://localhost:8080') {
+    this.url = url;
+    this.sessionId =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? `tab-${crypto.randomUUID().slice(0, 6)}`
+        : `tab-${Math.random().toString(36).slice(2, 8)}`;
   }
 
-  const url = options.url ?? 'ws://localhost:8080';
-  const sessionId =
-    options.sessionId ??
-    (typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID().slice(0, 8)
-      : Math.random().toString(36).slice(2, 9));
-
-  let ws: WebSocket | null = null;
-  const queue: string[] = [];
-
-  function send(msg: any) {
-    const payload = JSON.stringify({ ...msg, sessionId });
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(payload);
+  public send(msg: Record<string, unknown>) {
+    const payload = JSON.stringify({ ...msg, sessionId: this.sessionId });
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(payload);
     } else {
-      queue.push(payload);
+      this.queue.push(payload);
+      this.connect();
     }
   }
 
-  function connect() {
-    if (typeof WebSocket === 'undefined') return;
+  public connect() {
+    if (typeof WebSocket === 'undefined' || this.isConnecting) return;
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    this.isConnecting = true;
     try {
-      ws = new WebSocket(url);
-      ws.onopen = () => {
-        while (queue.length > 0) ws?.send(queue.shift()!);
+      this.ws = new WebSocket(this.url);
+      this.ws.onopen = () => {
+        this.isConnecting = false;
+        while (this.queue.length > 0) {
+          const item = this.queue.shift();
+          if (item) this.ws?.send(item);
+        }
       };
-      ws.onclose = () => setTimeout(connect, 2000);
-      ws.onerror = () => ws?.close();
+      this.ws.onclose = () => {
+        this.isConnecting = false;
+        this.ws = null;
+        setTimeout(() => this.connect(), 2000);
+      };
+      this.ws.onerror = () => {
+        this.isConnecting = false;
+        this.ws?.close();
+      };
     } catch {
-      setTimeout(connect, 2000);
+      this.isConnecting = false;
+      setTimeout(() => this.connect(), 2000);
     }
   }
+}
 
-  connect();
+let globalClient: TuiSingletonClient | null = null;
 
-  return (initializer: any) => (set: any, get: any, api: any) => {
-    const name = storeName || 'Store-1';
+function getGlobalClient(options: TuiOptions = {}): TuiSingletonClient | null {
+  if (typeof window === 'undefined') return null;
+  if (!globalClient) {
+    globalClient = new TuiSingletonClient(options.url ?? 'ws://localhost:8080');
+    if (options.sessionId) {
+      globalClient.sessionId = options.sessionId;
+    }
+    globalClient.connect();
+  }
+  return globalClient;
+}
 
-    const setWithAction = (partial: any, replace?: boolean, actionName?: string) => {
-      let action = actionName;
-      if (!action) {
+export function tui<T>(
+  storeOrName: T | string,
+  nameOrOptions?: string | TuiOptions,
+  maybeOptions?: TuiOptions
+): T {
+  // Bypassed in production, SSR, and Jest tests
+  if (
+    process.env.NODE_ENV === 'production' ||
+    process.env.NODE_ENV === 'test' ||
+    typeof window === 'undefined'
+  ) {
+    if (typeof storeOrName === 'string') {
+      return (((config: unknown) => config) as unknown) as T;
+    }
+    return storeOrName;
+  }
+
+  const options: TuiOptions = (typeof nameOrOptions === 'object' ? nameOrOptions : maybeOptions) || {};
+  const client = getGlobalClient(options);
+
+  // Pattern A: Post-creation wrapper (Non-intrusive, zero type friction)
+  if (
+    typeof storeOrName !== 'string' &&
+    storeOrName &&
+    typeof (storeOrName as unknown as StoreLike).getState === 'function'
+  ) {
+    const store = storeOrName as unknown as StoreLike;
+    const storeName = typeof nameOrOptions === 'string' ? nameOrOptions : 'Store-1';
+
+    if (client) {
+      client.send({ type: 'INIT_STORE', store: storeName, state: store.getState() });
+
+      const originalSetState = store.setState;
+      store.setState = (...args: unknown[]) => {
+        let action: unknown = args[2];
+        if (typeof action === 'object' && action !== null && 'type' in action) {
+          action = (action as { type: string }).type;
+        }
+        if (!action || typeof action !== 'string') {
+          const stack = new Error().stack;
+          const match = stack?.match(/at\s+(?:async\s+)?(?:[^\s(]+\.)?([a-zA-Z_$][a-zA-Z0-9_$]*)/g);
+          action = match?.[1] ? match[1].replace(/^at\s+/, '') : 'setState';
+        }
+
+        originalSetState.apply(store, args);
+
+        client.send({
+          type: 'ACTION',
+          store: storeName,
+          action: String(action),
+          state: store.getState(),
+          timestamp: Date.now(),
+        });
+      };
+    }
+
+    return storeOrName;
+  }
+
+  // Pattern B: Curried middleware: create(tui('store-name')( (set, get) => ... ))
+  const storeName = typeof storeOrName === 'string' ? storeOrName : 'Store-1';
+
+  const middleware = (initializer: any) => (set: any, get: any, api: any) => {
+    const setWithAction = (partial: any, replace?: boolean, actionParam?: any) => {
+      let action: any = actionParam;
+      if (typeof action === 'object' && action !== null && 'type' in action) {
+        action = action.type;
+      }
+      if (!action || typeof action !== 'string') {
         const stack = new Error().stack;
         const match = stack?.match(/at\s+(?:async\s+)?(?:[^\s(]+\.)?([a-zA-Z_$][a-zA-Z0-9_$]*)/g);
         action = match?.[1] ? match[1].replace(/^at\s+/, '') : 'anonymous';
       }
-      set(partial, replace);
-      send({ type: 'ACTION', store: name, action, state: get(), timestamp: Date.now() });
+      set(partial, replace, actionParam);
+      client?.send({
+        type: 'ACTION',
+        store: storeName,
+        action: String(action),
+        state: get(),
+        timestamp: Date.now(),
+      });
     };
 
     const state = initializer(setWithAction, get, api);
-    send({ type: 'INIT_STORE', store: name, state: get ? get() : state });
+    client?.send({ type: 'INIT_STORE', store: storeName, state: get ? get() : state });
     return state;
   };
+
+  return (middleware as unknown) as T;
 }
 ```
 
-### Wrap your Zustand store
+### Wrapping Your Zustand Stores
+
+#### Pattern A: Post-Creation Wrapper (Recommended)
+
+Non-intrusive. Wrap your existing store export without altering its type definitions or nested middleware (`persist`, `devtools`, `immer`):
 
 ```typescript
 import { create } from 'zustand';
-import { tui } from './zustand-tui';
+import { devtools, persist } from 'zustand/middleware';
+import { tui } from '@/utils/zustand-tui';
+
+export const useCartStore = tui(
+  create<CartState>()(
+    devtools(
+      persist(
+        (set) => ({
+          items: [],
+          addItem: (item) => set((s) => ({ items: [...s.items, item] })),
+        }),
+        { name: 'cart-storage' }
+      )
+    )
+  ),
+  'cart-store'
+);
+```
+
+#### Pattern B: Curried Middleware
+
+Wrap the store initializer directly:
+
+```typescript
+import { create } from 'zustand';
+import { tui } from '@/utils/zustand-tui';
 
 export const useBearStore = create(
   tui('bearStore')((set) => ({
